@@ -1,0 +1,59 @@
+CappuccinoVMはJavaScriptによって実装されたJavaVirtualMachineです。プラグインに頼らずにJavaScriptだけで全部実装しているのがJavaアプレットとの違いです。最終的には多くのWebブラウザ上で動作するようにしたいと思っていますが、今のところChromeのver.15以上(?)でないと動作しません。
+FireFoxのver.10では動作しませんが、Nightly Buildの12では動作するようです。HTML5の実装にばらつきがあるのが悪いんです…
+
+使い方:
+とりあえずHelloWorldしてみましょう。
+
+//HeloWorld.java
+class HelloWorld
+{
+	public static void main(Strings args[])
+	{
+		System.out.println("Hello World!");
+	}
+}
+
+これをコンパイルしてHelloWorld.class作ります。
+
+$javac HelloWorld.java
+
+HelloWorld.classをcappuccino_vm.jsといっしょにWebサーバーで公開されているディレクトリに置きます。
+そしてそのディレクトリで以下のようなhtmlを作ります。
+
+<!doctype html>
+<html>
+        <head>
+                <meta charset="utf-8">
+                <title>HelloWorld by CappuccinoVM</title>
+                <script type="text/javascript" src="cappuccino_vm.js"></script>
+        </head>
+        <body>
+                <script type="text/javascript">
+                //java HelloWorldに相当する
+                CappuccinoVM.startMain('HelloWorld');
+                </script>
+        <body>
+</html>
+
+このページをWebブラウザで開くと…何も表示されません。
+とりあえず今の実装ではconsole.logで出力しているので、ブラウザのコンソールを確認してください(Chromeではツール->JavaScriptコンソール)。
+
+仕組み:
+CappuccinoVM.startMain('HelloWorld');
+これが実行されるとCappuccinoVMはHelloWorld.classをサーバーからダウンロードしてきます。そしてクラスファイルを解析し、JavaバイトコードをJavaScritpに変換して実行します。いわゆるJITコンパイラです(むしろJIT逆コンパイラと言うべきか?)。
+
+
+現在の進捗:
+JavaVMの命令の半分程度を実装しています。簡単な処理を行って結果をSystem.out.printlnすることはできます。longは使えませんがint,float,doubleなどは使えます。
+
+今後実装したいと思っているもの:
+マルチスレッド
+例外処理
+Swing
+WebStorageを使った仮想ファイルシステムのようなもの
+Android,iOS対応
+
+
+
+
+
