@@ -65,10 +65,8 @@ new function()
 
 				case "D":
 				case "J":
-					//doubleとかlongとか気にする必要がないのか?
-					//よくわからない
-					//paramLength+=2;
-					paramLength++;
+					paramLength+=2;
+					//paramLength++;
 					i+=1;
 					break;
 
@@ -88,8 +86,7 @@ new function()
 					while(true)
 					{
 						c = descriptor.charAt(i);
-						if(c == "B" || c == "C" || c == "F" || c == "I" || c == "S" || c == "Z" ||
-						   c == "D" || c == "J")
+						if(c == "B" || c == "C" || c == "F" || c == "I" || c == "S" || c == "Z" || c == "D" || c == "J")
 						{
 							i++;
 							break;
@@ -185,6 +182,38 @@ new function()
 
 	ConstFieldref.prototype = new ConstReferrence();
 
+	ConstFieldref.prototype.resolve = function()
+	{
+		ConstReferrence.prototype.resolve.apply(this, arguments);
+		var desc = this.value.descriptor.charAt(0);
+		switch(desc)
+		{
+			case "B":
+			case "C":
+			case "I":
+			case "S":
+			case "Z":
+				this.valueClass = ValueInteger;
+				break;
+			case "F":
+				this.valueClass = ValueFloat;
+				break;
+			case "D":
+				this.valueClass = ValueDouble;
+				break;
+			case "J":
+				this.valueClass = ValueLong;
+				break;
+			case "L":
+			case "[":
+				this.valueClass = ValueObject;
+				break;
+			default:
+				this.valueClass = ValueInteger;
+		}
+
+	}
+
 	var ConstMethodref = function()
 	{
 		ConstReferrence.apply(this, arguments);
@@ -213,7 +242,8 @@ new function()
 
 	ConstString.prototype.resolve = function(cpool)
 	{
-		this.value = cpool[this.stringIndex].value;
+		//this.value = cpool[this.stringIndex].value;
+		this.value = new ValueObject(createJavaString(cpool[this.stringIndex].value));
 	}
 
 	ConstString.prototype.debugPrint = function()
@@ -226,14 +256,30 @@ new function()
 		//debugPrint("ConstInteger:" + bytes);
 		this.tag = tag;
 		//this.value = get32BitsSigned(bytes);
-		this.value = bytes;
+		//this.value = bytes;
+		this.value = new ValueInteger(bytes);
 	}
 
 	ConstInteger.prototype.resolve = function(cpool) {}
 
 	ConstInteger.prototype.debugPrint = function()
 	{
-		debubPrint("Integer " + this.value);
+		debubPrint("Integer " + this.value.value);
+	}
+
+	//いんちきLong。64bitの整数をあとで真面目に実装する。
+	var ConstLong = function(tag, bytes)
+	{
+		this.tag = tag;
+		//this.value = bytes;
+		this.value = new ValueLong(bytes);
+	}
+
+	ConstLong.prototype.resolve = function(cpool) {}
+
+	ConstLong.prototype.debugPrint = function()
+	{
+		debugPrint("Long " + this.value.value);
 	}
 
 	var ConstFloat = function(tag, bytes)
@@ -243,14 +289,15 @@ new function()
 		var s = ((bytes >>> 31) == 1) ? -1 : 1;
 		var e = (bytes >>> 23) & 0xff;
 		var m = (e == 0) ?  (bytes & 0x7fffff) << 1 : (bytes & 0x7fffff) | 0x800000;
-		this.value = s * m * Math.pow(2, e-150);
+		//this.value = s * m * Math.pow(2, e-150);
+		this.value = new ValueFloat(s * m * Math.pow(2, e-150));
 	}
 
 	ConstFloat.prototype.resolve = function(cpool) {}
 
 	ConstFloat.prototype.debugPrint = function()
 	{
-		debugPrint("Float " + this.value);
+		debugPrint("Float " + this.value.value);
 	}
 
 	var ConstDouble = function(tag, highBytes, lowBytes)
@@ -270,15 +317,16 @@ new function()
 		}
 		//debugPrint("s=" + s + " e=" + e + " m=" + m);
 
-		this.value = s * m * Math.pow(2, e-1075);
+		//this.value = s * m * Math.pow(2, e-1075);
 		//debugPrint("double value=" + this.value);
+		this.value = new ValueDouble(s * m * Math.pow(2, e-1075));
 	}
 
 	ConstDouble.prototype.resolve = function(cpool) {}
 
 	ConstDouble.prototype.debugPrint = function()
 	{
-		debugPrint("Double " + this.value);
+		debugPrint("Double " + this.value.value);
 	}
 
 	var ConstNameAndType = function(tag, nameIndex, descriptorIndex)
@@ -314,6 +362,150 @@ new function()
 		debugPrint("Utf8 " + this.value);
 	}
 
+	var ValueInteger = function(value)
+	{
+		this.value = value;
+	}
+
+	ValueInteger.prototype.duplicate = function()
+	{
+		return new ValueInteger(this.value);
+	}
+
+	ValueInteger.prototype.add = function(x)
+	{
+		this.value += x.value;
+	}
+
+	ValueInteger.prototype.sub = function(x)
+	{
+		this.value -= x.value;
+	}
+
+	ValueInteger.prototype.mul = function(x)
+	{
+		this.value *= x.value;
+	}
+
+	ValueInteger.prototype.div = function(x)
+	{
+		this.value /= x.value;
+	}
+
+	ValueInteger.getClassName = function()
+	{
+		return "ValueInteger";
+	}
+
+	var ValueFloat = function(value)
+	{
+		this.value = value;
+	}
+
+	ValueFloat.prototype.duplicate = function()
+	{
+		return new ValueFloat(this.value);
+	}
+
+	ValueFloat.prototype.add = function(x)
+	{
+		this.value += x.value;
+	}
+
+	ValueFloat.prototype.sub = function(x)
+	{
+		this.value -= x.value;
+	}
+
+	ValueFloat.prototype.mul = function(x)
+	{
+		this.value *= x.value;
+	}
+
+	ValueFloat.prototype.div = function(x)
+	{
+		this.value /= x.value;
+	}
+
+	ValueFloat.getClassName = function()
+	{
+		return "ValueFloat";
+	}
+
+	var ValueDouble = function(value)
+	{
+		this.value = value;
+	}
+
+	ValueDouble.prototype.duplicate = function()
+	{
+		return new ValueDouble(this.value);
+	}
+
+	ValueDouble.prototype.add = function(x)
+	{
+		this.value += x.value;
+	}
+
+	ValueDouble.prototype.sub = function(x)
+	{
+		this.value -= x.value;
+	}
+
+	ValueDouble.prototype.mul = function(x)
+	{
+		this.value *= x.value;
+	}
+
+	ValueDouble.prototype.div = function(x)
+	{
+		this.value /= x.value;
+	}
+
+	ValueDouble.getClassName = function()
+	{
+		return "ValueDouble";
+	}
+
+	var ValueLong = function(value)
+	{
+		this.value = value;
+	}
+
+	ValueLong.prototype.duplicate = function()
+	{
+		return new ValueLong(this.value);
+	}
+
+	ValueLong.getClassName = function()
+	{
+		return "ValueLong";
+	}
+
+	var ValueObject = function(value)
+	{
+		this.value = value;
+	}
+
+	ValueObject.prototype.duplicate = function()
+	{
+		return new ValueObject(this.value);
+	}
+
+	ValueObject.getClassName = function()
+	{
+		return "ValueObject";
+	}
+
+	var ValueDummy = function() {}
+
+	ValueDummy.getClassName = function()
+	{
+		return "ValueDummy";
+	}
+
+	var valueDummy = new ValueDummy();
+
 	var Method = function(accessFlags, name, descriptor, $cappuccino)
 	{
 		this.accessFlags = accessFlags;
@@ -330,7 +522,7 @@ new function()
 
 	Method.prototype.debugPrint = function()
 	{
-		debugPrint("Method " + this.name + " " + this.descriptor);
+		debugPrint("Method " + this.name + " " + this.descriptor + " paramLength=" + this.paramLength);
 	}
 
 	Method.prototype.getCompiledMethod = function()
@@ -351,11 +543,14 @@ new function()
 	const ICONST_3 = 0x06;
 	const ICONST_4 = 0x07;
 	const ICONST_5 = 0x08;
+	const DCONST_0 = 0xe;
+	const DCONST_1 = 0xf;
 	const BIPUSH = 0x10;
 	const SIPUSH = 0x11;
 	const LDC = 0x12;
 	const LDC2_W = 0x14;
 	const ILOAD = 0x15;
+	const LLOAD = 0x16;
 	const FLOAD = 0x17;
 	const DLOAD = 0x18;
 	const ALOAD = 0x19;
@@ -363,6 +558,10 @@ new function()
 	const ILOAD_1 = 0x1b;
 	const ILOAD_2 = 0x1c;
 	const ILOAD_3 = 0x1d;
+	const LLOAD_0 = 0x1e;
+	const LLOAD_1 = 0x1f;
+	const LLOAD_2 = 0x20;
+	const LLOAD_3 = 0x21;
 	const FLOAD_0 = 0x22;
 	const FLOAD_1 = 0x23;
 	const FLOAD_2 = 0x24;
@@ -376,10 +575,12 @@ new function()
 	const ALOAD_2 = 0x2c;
 	const ALOAD_3 = 0x2d;
 	const IALOAD = 0x2e;
+	const LALOAD = 0x2f;
 	const FALOAD = 0x30;
 	const DALOAD = 0x31;
 	const AALOAD = 0x32;
 	const ISTORE = 0x36;
+	const LSTORE = 0x37;
 	const FSTORE = 0x38;
 	const DSTORE = 0x39;
 	const ASTORE = 0x3a;
@@ -387,6 +588,10 @@ new function()
 	const ISTORE_1 = 0x3c;
 	const ISTORE_2 = 0x3d;
 	const ISTORE_3 = 0x3e;
+	const LSTORE_0 = 0x3f;
+	const LSTORE_1 = 0x40;
+	const LSTORE_2 = 0x41;
+	const LSTORE_3 = 0x42;
 	const FSTORE_0 = 0x43;
 	const FSTORE_1 = 0x44;
 	const FSTORE_2 = 0x45;
@@ -400,23 +605,33 @@ new function()
 	const ASTORE_2 = 0x4d;
 	const ASTORE_3 = 0x4e;
 	const IASTORE = 0x4f;
+	const LASTORE = 0x50;
 	const FASTORE = 0x51;
 	const DASTORE = 0x52;
 	const AASTORE = 0x53;
 	const DUP = 0x59;
+	const DUP2 = 0x5c;
 	const IADD = 0x60;
+	const LADD = 0x61;
 	const FADD = 0x62;
 	const DADD = 0x63;
 	const ISUB = 0x64;
+	const LSUB = 0x65;
 	const FSUB = 0x66;
 	const DSUB = 0x67;
 	const IMUL = 0x68;
+	const LMUL = 0x69;
 	const FMUL = 0x6a;
 	const DMUL = 0x6b;
 	const IDIV = 0x6c;
+	const LDIV = 0x6d;
 	const FDIV = 0x6e;
 	const DDIV = 0x6f;
 	const IREM = 0x70;
+	const LREM = 0x71;
+	const INEG = 0x74;
+	const FNEG = 0x76;
+	const DNEG = 0x77;
 	const ISHL = 0x78;
 	const ISHR = 0x7a;
 	const IUSHR = 0x7c;
@@ -426,7 +641,14 @@ new function()
 	const IINC = 0x84;
 	const I2F = 0x86;
 	const I2D = 0x87;
+	const L2F = 0x89;
+	const L2D = 0x8a;
+	const D2I = 0x8e;
+	const D2L = 0x8f;
+	const D2F = 0x90;
 	const I2B = 0x91;
+	const DCMPL = 0x97;
+	const DCMPG = 0x98;
 	const IFEQ = 0x99;
 	const IFNE = 0x9a;
 	const IFLT = 0x9b;
@@ -445,6 +667,9 @@ new function()
 	const TABLESWITCH = 0xaa;
 	const LOOKUPSWITCH = 0xab;
 	const IRETURN = 0xac;
+	const LRETURN = 0xad;
+	const FRETURN = 0xae;
+	const DRETURN = 0xaf;
 	const ARETURN = 0xb0;
 	const RETURN = 0xb1;
 	const GETSTATIC = 0xb2;
@@ -463,7 +688,7 @@ new function()
 	const IFNONNULL = 0xc7;
 	
 	Method.instTable = [];
-	var notImplement = function(code, i, jsCodes)
+	var notImplement = function(code, i, jsCodes, $cappuccino)
 	{
 		throw Error("Not implemented pc=" + i + " opcode=" + code[i]);
 	}
@@ -476,147 +701,263 @@ new function()
 		return i + 1;
 	}
 
-	Method.instTable[ISTORE] = Method.instTable[ASTORE] = Method.instTable[FSTORE] = Method.instTable[DSTORE] = function(code, i, jsCodes)
+	Method.instTable[ISTORE] = Method.instTable[ASTORE] = Method.instTable[FSTORE] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack[stackTop+" + code[i+1] + "] = vmStack.pop();");
 		return i + 2;
 	}
 
-	Method.instTable[ISTORE_0] = Method.instTable[ASTORE_0] = Method.instTable[FSTORE_0] = Method.instTable[DSTORE_0] = function(code, i, jsCodes)
+	Method.instTable[DSTORE] = Method.instTable[LSTORE] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("vmStack[stackTop+" + code[i+1] + "] = vmStack.pop()");
+		return i + 2;
+	}
+
+	Method.instTable[ISTORE_0] =  Method.instTable[ASTORE_0] = Method.instTable[FSTORE_0] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack[stackTop] = vmStack.pop();");
 		return i + 1;
 	}
 
-	Method.instTable[ISTORE_1] = Method.instTable[ASTORE_1] = Method.instTable[FSTORE_1] = Method.instTable[DSTORE_1] = function(code, i, jsCodes)
+	Method.instTable[DSTORE_0] = Method.instTable[LSTORE_0] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("vmStack[stackTop] = vmStack.pop();");
+		return i + 1;
+	}
+
+	Method.instTable[ISTORE_1] = Method.instTable[ASTORE_1] = Method.instTable[FSTORE_1] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack[stackTop + 1] = vmStack.pop();");
 		return i + 1;
 	}
 
-	Method.instTable[ISTORE_2] = Method.instTable[ASTORE_2] = Method.instTable[FSTORE_2] = Method.instTable[DSTORE_2] = function(code, i, jsCodes)
+	Method.instTable[DSTORE_1] = Method.instTable[LSTORE_1] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("vmStack[stackTop + 1] = vmStack.pop();");
+		return i + 1;
+	}
+
+	Method.instTable[ISTORE_2] = Method.instTable[ASTORE_2] = Method.instTable[FSTORE_2] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack[stackTop + 2] = vmStack.pop();");
 		return i + 1;
 	}
 
-	Method.instTable[ISTORE_3] = Method.instTable[ASTORE_3] = Method.instTable[FSTORE_3] = Method.instTable[DSTORE_3] = function(code, i, jsCodes)
+	Method.instTable[DSTORE_2] = Method.instTable[LSTORE_2] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("vmStack[stackTop + 2] = vmStack.pop();");
+		return i + 1;
+	}
+
+	Method.instTable[ISTORE_3] = Method.instTable[ASTORE_3] = Method.instTable[FSTORE_3] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack[stackTop + 3] = vmStack.pop();");
 		return i + 1;
 	}
 
-	Method.instTable[ILOAD] = Method.instTable[ALOAD] = Method.instTable[FLOAD] = Method.instTable[DLOAD] = function(code, i, jsCodes)
+	Method.instTable[DSTORE_3] = Method.instTable[LSTORE_3] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(vmStack[stackTop+" + code[i+1] +"]);");
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("vmStack[stackTop + 3] = vmStack.pop();");
+		return i + 1;
+	}
+
+	Method.instTable[ILOAD] = Method.instTable[ALOAD] = Method.instTable[FLOAD]  = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.push(vmStack[stackTop+" + code[i+1] +"].duplicate());");
 		return i + 2;
 	}
 
-	Method.instTable[ILOAD_0] = Method.instTable[ALOAD_0] = Method.instTable[FLOAD_0] = Method.instTable[DLOAD_0] = function(code, i, jsCodes)
+	Method.instTable[DLOAD] = Method.instTable[LLOAD] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(vmStack[stackTop]);");
+		jsCodes.push("vmStack.push(vmStack[stackTop+" + code[i+1] +"].duplicate());");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
+		return i + 2;
+	}
+
+	Method.instTable[ILOAD_0] = Method.instTable[ALOAD_0] = Method.instTable[FLOAD_0] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.push(vmStack[stackTop].duplicate());");
 		return i + 1;
 	}
 
-	Method.instTable[ILOAD_1] = Method.instTable[ALOAD_1] = Method.instTable[FLOAD_1] = Method.instTable[DLOAD_1] = function(code, i, jsCodes)
+	Method.instTable[DLOAD_0] = Method.instTable[LLOAD_0] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(vmStack[stackTop+1]);");
+		jsCodes.push("vmStack.push(vmStack[stackTop].duplicate());");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
 		return i + 1;
 	}
 
-	Method.instTable[ILOAD_2] = Method.instTable[ALOAD_2] = Method.instTable[FLOAD_2] = Method.instTable[DLOAD_2] = function(code, i, jsCodes)
+	Method.instTable[ILOAD_1] = Method.instTable[ALOAD_1] = Method.instTable[FLOAD_1] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(vmStack[stackTop+2]);");
+		jsCodes.push("vmStack.push(vmStack[stackTop+1].duplicate());");
 		return i + 1;
 	}
 
-	Method.instTable[ILOAD_3] = Method.instTable[ALOAD_3] = Method.instTable[FLOAD_3] = Method.instTable[DLOAD_3] = function(code, i, jsCodes)
+	Method.instTable[DLOAD_1] = Method.instTable[LLOAD_1] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(vmStack[stackTop+3]);");
+		jsCodes.push("vmStack.push(vmStack[stackTop+1].duplicate());");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
 		return i + 1;
 	}
 
-	Method.instTable[IASTORE] = Method.instTable[AASTORE] = Method.instTable[FASTORE] = Method.instTable[DASTORE] = function(code, i, jsCodes)
+	Method.instTable[ILOAD_2] = Method.instTable[ALOAD_2] = Method.instTable[FLOAD_2] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.push(vmStack[stackTop+2].duplicate());");
+		return i + 1;
+	}
+
+	Method.instTable[DLOAD_2] = Method.instTable[LLOAD_2] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.push(vmStack[stackTop+2].duplicate());");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
+		return i + 1;
+	}
+
+	Method.instTable[ILOAD_3] = Method.instTable[ALOAD_3] = Method.instTable[FLOAD_3] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.push(vmStack[stackTop+3].duplicate());");
+		return i + 1;
+	}
+
+	Method.instTable[DLOAD_3] = Method.instTable[LLOAD_3] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.push(vmStack[stackTop+3].duplicate());");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
+		return i + 1;
+	}
+
+	Method.instTable[IASTORE] = Method.instTable[AASTORE] = Method.instTable[FASTORE] = function(code, i, jsCodes)
 	{
 		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
-		jsCodes.push("obj = vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("obj = vmStack.pop().value;");
 		jsCodes.push("obj[operand1] = operand2;");
 		return i + 1;
 	}
 
-	Method.instTable[IALOAD] = Method.instTable[AALOAD] = Method.instTable[FALOAD] = Method.instTable[DALOAD] = function(code, i, jsCodes)
+	Method.instTable[DASTORE] = Method.instTable[LASTORE] =  function(code, i, jsCodes)
 	{
-		jsCodes.push("operand1 = vmStack.pop();");
-		jsCodes.push("obj = vmStack.pop();");
-		jsCodes.push("vmStack.push(obj[operand1]);");
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("operand2 = vmStack.pop()");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("obj = vmStack.pop().value;");
+		jsCodes.push("obj[operand1] = operand2;");
+		return i + 1;
+	}
+
+	Method.instTable[IALOAD] = Method.instTable[AALOAD] = Method.instTable[FALOAD] = function(code, i, jsCodes)
+	{
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("obj = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(obj[operand1].duplicate());");
+		return i + 1;
+	}
+
+	Method.instTable[DALOAD] = Method.instTable[LALOAD] = function(code, i, jsCodes)
+	{
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("obj = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(obj[operand1].duplicate());");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
 		return i + 1;
 	}
 
 	Method.instTable[DUP] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(vmStack[vmStack.length-1]);");
+		jsCodes.push("vmStack.push(vmStack[vmStack.length-1].duplicate());");
+		return i + 1;
+	}
+
+	Method.instTable[DUP2] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.push(vmStack[vmStack.length-2].duplicate());");
+		jsCodes.push("vmStack.push(vmStack[vmStack.length-2].duplicate());");
 		return i + 1;
 	}
 
 	Method.instTable[BIPUSH] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(" + get8BitsSigned(code[i+1]) + ");");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(" + get8BitsSigned(code[i+1]) + "));");
 		return i + 2;
 	}
 
 	Method.instTable[SIPUSH] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(" + get16BitsSigned((code[i+1] << 8) + code[i+2]) + ");");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(" + get16BitsSigned((code[i+1] << 8) + code[i+2]) + "));");
 		return i + 3;
+	}
+
+	Method.instTable[ACONST_NULL] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueObject(null));");
+		return i + 1;
 	}
 
 	Method.instTable[ICONST_M1] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(-1);");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(-1));");
 		return i + 1;
 	}
 
 	Method.instTable[ICONST_0] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(0);");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(0));");
 		return i + 1;
 	}
 
 	Method.instTable[ICONST_1] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(1);");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(1));");
 		return i + 1;
 	}
 
 	Method.instTable[ICONST_2] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(2);");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(2));");
 		return i + 1;
 	}
 
 	Method.instTable[ICONST_3] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(3);");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(3));");
 		return i + 1;
 	}
 
 	Method.instTable[ICONST_4] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(4);");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(4));");
 		return i + 1;
 	}
 
 	Method.instTable[ICONST_5] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(5);");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(5));");
+		return i + 1;
+	}
+
+	Method.instTable[DCONST_0] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueDouble(0.0));");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
+		return i + 1;
+	}
+
+	Method.instTable[DCONST_1] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueDouble(1.0));");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
 		return i + 1;
 	}
 
 	Method.instTable[IFEQ] = function(code, i, jsCodes)
 	{
 		var addr;
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		jsCodes.push("if(operand1==0){");
 		addr = i + get16BitsSigned((code[i+1] << 8) + code[i+2]);
 		jsCodes.push("pc = " + addr + "; continue;}");
@@ -626,7 +967,7 @@ new function()
 	Method.instTable[IFNE] = function(code, i, jsCodes)
 	{
 		var addr;
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		jsCodes.push("if(operand1!=0){");
 		addr = i + get16BitsSigned((code[i+1] << 8) + code[i+2]);
 		jsCodes.push("pc = " + addr + "; continue;}");
@@ -636,7 +977,7 @@ new function()
 	Method.instTable[IFLT] = function(code, i, jsCodes)
 	{
 		var addr;
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		jsCodes.push("if(operand1<0){");
 		addr = i + get16BitsSigned((code[i+1] << 8) + code[i+2]);
 		jsCodes.push("pc = " + addr + "; continue;}");
@@ -646,7 +987,7 @@ new function()
 	Method.instTable[IFLE] = function(code, i, jsCodes)
 	{
 		var addr;
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		jsCodes.push("if(operand1<=0){");
 		addr = i + get16BitsSigned((code[i+1] << 8) + code[i+2]);
 		jsCodes.push("pc = " + addr + "; continue;}");
@@ -656,7 +997,7 @@ new function()
 	Method.instTable[IFGT] = function(code, i, jsCodes)
 	{
 		var addr;
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		jsCodes.push("if(operand1>0){");
 		addr = i + get16BitsSigned((code[i+1] << 8) + code[i+2]);
 		jsCodes.push("pc = " + addr + "; continue;}");
@@ -666,7 +1007,7 @@ new function()
 	Method.instTable[IFGE] = function(code, i, jsCodes)
 	{
 		var addr;
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		jsCodes.push("if(operand1>=0){");
 		addr = i + get16BitsSigned((code[i+1] << 8) + code[i+2]);
 		jsCodes.push("pc = " + addr + "; continue;}");
@@ -676,8 +1017,8 @@ new function()
 	Method.instTable[IF_ICMPEQ] = Method.instTable[IF_ACMPEQ] = function(code, i, jsCodes)
 	{
 		var addr;
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		jsCodes.push("if(operand1==operand2){");
 		addr = i + get16BitsSigned((code[i+1] << 8) + code[i+2]);
 		jsCodes.push("pc = " + addr + "; continue;}");
@@ -687,8 +1028,8 @@ new function()
 	Method.instTable[IF_ICMPNE] = Method.instTable[IF_ACMPNE] = function(code, i, jsCodes)
 	{
 		var addr;
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		jsCodes.push("if(operand1!=operand2){");
 		addr = i + get16BitsSigned((code[i+1] << 8) + code[i+2]);
 		jsCodes.push("pc = " + addr + "; continue;}");
@@ -698,8 +1039,8 @@ new function()
 	Method.instTable[IF_ICMPLT] = function(code, i, jsCodes)
 	{
 		var addr;
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		jsCodes.push("if(operand1<operand2){");
 		addr = i + get16BitsSigned((code[i+1] << 8) + code[i+2]);
 		jsCodes.push("pc = " + addr + "; continue;}");
@@ -709,8 +1050,8 @@ new function()
 	Method.instTable[IF_ICMPLE] = function(code, i, jsCodes)
 	{
 		var addr;
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		jsCodes.push("if(operand1<=operand2){");
 		addr = i + get16BitsSigned((code[i+1] << 8) + code[i+2]);
 		jsCodes.push("pc = " + addr + "; continue;}");
@@ -720,8 +1061,8 @@ new function()
 	Method.instTable[IF_ICMPGT] = function(code, i, jsCodes)
 	{
 		var addr;
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		jsCodes.push("if(operand1>operand2){");
 		addr = i + get16BitsSigned((code[i+1] << 8) + code[i+2]);
 		jsCodes.push("pc = " + addr + "; continue;}");
@@ -731,8 +1072,8 @@ new function()
 	Method.instTable[IF_ICMPGE] = function(code, i, jsCodes)
 	{
 		var addr;
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		jsCodes.push("if(operand1>=operand2){");
 		addr = i + get16BitsSigned((code[i+1] << 8) + code[i+2]);
 		jsCodes.push("pc = " + addr + "; continue;}");
@@ -742,7 +1083,7 @@ new function()
 	Method.instTable[IFNULL] = function(code, i, jsCodes)
 	{
 		var addr;
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		jsCodes.push("if(operand1 == null){");
 		addr = i + get16BitsSigned((code[i+1] << 8) + code[i+2]);
 		jsCodes.push("pc = " + addr + "; continue;}");
@@ -752,7 +1093,7 @@ new function()
 	Method.instTable[IFNONNULL] = function(code, i, jsCodes)
 	{
 		var addr;
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		jsCodes.push("if(operand1 != null){");
 		addr = i + get16BitsSigned((code[i+1] << 8) + code[i+2]);
 		jsCodes.push("pc = " + addr + "; continue;}");
@@ -777,7 +1118,7 @@ new function()
 		_i += 4;
 		high = ((code[_i] << 24) + (code[_i+1] << 16) + (code[_i+2] << 8) + code[_i+3]);
 		_i += 4;
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		for(j = low; j <= high; j++)
 		{
 			addr = i + ((code[_i] << 24) + (code[_i+1] << 16) + (code[_i+2] << 8) + code[_i+3]);
@@ -796,7 +1137,7 @@ new function()
 		_i += 4;
 		npairs = (code[_i] << 24) + (code[_i+1] << 16) + (code[_i+2] << 8) + code[_i+3];
 		_i += 4;
-		jsCodes.push("operand1 = vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
 		for(j = 0; j < npairs; j++)
 		{
 			match = ((code[_i] << 24) + (code[_i+1] << 16) + (code[_i+2] << 8) + code[_i+3]);
@@ -811,99 +1152,216 @@ new function()
 
 	Method.instTable[IINC] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack[stackTop+" + code[i+1] + "]+=" + get8BitsSigned(code[i+2]) + ";");
+		jsCodes.push("vmStack[stackTop+" + code[i+1] + "].value+=" + get8BitsSigned(code[i+2]) + ";");
 		return i + 3;
 	}
 
-	Method.instTable[IADD] = Method.instTable[FADD] = Method.instTable[DADD] = function(code, i, jsCodes)
+	Method.instTable[IADD] = Method.instTable[FADD] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(vmStack.pop() + vmStack.pop());");
+		//jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(vmStack.pop().value + vmStack.pop().value));");
+		jsCodes.push("vmStack[vmStack.length-2].add(vmStack[vmStack.length-1]);");
+		jsCodes.push("vmStack.pop();");
 		return i + 1;
 	}
 
-	Method.instTable[ISUB] = Method.instTable[FSUB] = Method.instTable[DSUB] = function(code, i, jsCodes)
+	Method.instTable[DADD] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
-		jsCodes.push("vmStack.push(operand1 - operand2);");
+		/*
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueDouble(operand1 + operand2));");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
+		*/
+		jsCodes.push("vmStack[vmStack.length-4].add(vmStack[vmStack.length-2]);");
+		jsCodes.push("vmStack.pop(); vmStack.pop()");
 		return i + 1;
 	}
 
-	Method.instTable[IMUL] = Method.instTable[FMUL] = Method.instTable[DMUL] = function(code, i, jsCodes)
+	Method.instTable[ISUB] = Method.instTable[FSUB] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.push(vmStack.pop() * vmStack.pop());");
+		//jsCodes.push("operand2 = vmStack.pop().value;");
+		//jsCodes.push("operand1 = vmStack.pop().value;");
+		//jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 - operand2));");
+		jsCodes.push("vmStack[vmStack.length-2].sub(vmStack[vmStack.length-1]);");
+		jsCodes.push("vmStack.pop();");
 		return i + 1;
 	}
 
-	Method.instTable[IDIV] = function(code, i, jsCodes)
+	Method.instTable[DSUB] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
-		jsCodes.push("vmStack.push(Math.floor(operand1 / operand2));");
+		/*
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueDouble(operand1 - operand2));");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
+		*/
+		jsCodes.push("vmStack[vmStack.length-4].sub(vmStack[vmStack.length-2]);");
+		jsCodes.push("vmStack.pop(); vmStack.pop()");
 		return i + 1;
 	}
 
-	Method.instTable[FDIV] = Method.instTable[DDIV] =  function(code, i, jsCodes)
+	Method.instTable[IMUL] = Method.instTable[FMUL] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
-		jsCodes.push("vmStack.push(operand1 / operand2);");
+		jsCodes.push("vmStack[vmStack.length-2].mul(vmStack[vmStack.length-1]);");
+		jsCodes.push("vmStack.pop();");
+		return i + 1;
+	}
+
+	Method.instTable[DMUL] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack[vmStack.length-4].mul(vmStack[vmStack.length-2]);");
+		jsCodes.push("vmStack.pop(); vmStack.pop()");
+		return i + 1;
+	}
+
+	Method.instTable[IDIV] = Method.instTable[FDIV] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack[vmStack.length-2].div(vmStack[vmStack.length-1]);");
+		jsCodes.push("vmStack.pop();");
+		return i + 1;
+	}
+
+	Method.instTable[DDIV] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack[vmStack.length-4].div(vmStack[vmStack.length-2]);");
+		jsCodes.push("vmStack.pop(); vmStack.pop()");
 		return i + 1;
 	}
 
 	Method.instTable[IREM] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
-		jsCodes.push("vmStack.push(operand1 % operand2);");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 % operand2));");
+		return i + 1;
+	}
+
+	Method.instTable[INEG] = function(code, i, jsCodes)
+	{
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 * -1));");
+		return i + 1;
+	}
+
+	Method.instTable[DNEG] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueDouble(operand1 * -1));");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
+		return i + 1;
+	}
+
+	Method.instTable[DCMPL] = Method.instTable[DCMPG] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("if(operand1 > operand2){vmStack.push(new CappuccinoVM.ValueInteger(1));}");
+		jsCodes.push("else if(operand1 == operand2){vmStack.push(new CappuccinoVM.ValueInteger(0));}");
+		jsCodes.push("else {vmStack.push(new CappuccinoVM.ValueInteger(-1));}");
 		return i + 1;
 	}
 
 	Method.instTable[ISHL] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
-		jsCodes.push("vmStack.push(operand1 << operand2);");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 << operand2));");
 		return i + 1;
 	}
 
 	Method.instTable[ISHR] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
-		jsCodes.push("vmStack.push(operand1 >> operand2);");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 >> operand2));");
 		return i + 1;
 	}
 
 	Method.instTable[IUSHR] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
-		jsCodes.push("vmStack.push(operand1 >>> operand2);");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 >>> operand2));");
 		return i + 1;
 	}
 
 	Method.instTable[IAND] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
-		jsCodes.push("vmStack.push(operand1 & operand2);");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 & operand2));");
 		return i + 1;
 	}
 
 	Method.instTable[IOR] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
-		jsCodes.push("vmStack.push(operand1 | operand2);");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 | operand2));");
 		return i + 1;
 	}
 
 	Method.instTable[IXOR] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop();");
-		jsCodes.push("vmStack.push(operand1 ^ operand2);");
+		jsCodes.push("operand2 = vmStack.pop().value;");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 ^ operand2));");
+		return i + 1;
+	}
+
+	Method.instTable[I2F] = function(code, i, jsCodes)
+	{
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueFloat(operand1));");
+		return i + 1;
+	}
+
+	Method.instTable[I2D] = function(code, i, jsCodes)
+	{
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueDouble(operand1));");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
+		return i + 1;
+	}
+
+	Method.instTable[L2F] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueFloat(operand1));");
+		return i + 1;
+	}
+
+	Method.instTable[L2D] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueDouble(operand1));");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
+		return i + 1;
+	}
+
+
+	Method.instTable[D2I] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(Math.floor(operand1)));");
+		return i + 1;
+	}
+
+	Method.instTable[D2F] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("operand1 = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueFloat(operand1));");
 		return i + 1;
 	}
 
@@ -912,21 +1370,21 @@ new function()
 		var cindex = (code[i+1] << 8) + code[i+2];
 		var cname = $cappuccino.constantPool[cindex].value;
 		jsCodes.push("jclass = CappuccinoVM.getJavaClass('" + cname  + "');");
-		jsCodes.push("vmStack.push(new jclass());");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueObject(new jclass()));");
 		return i + 3;
 	}
 
 	Method.instTable[NEWARRAY] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack.pop();"); //countは捨てる
-		jsCodes.push("vmStack.push([]);");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueObject([]));");
 		return i + 2;
 	}
 
 	Method.instTable[ANEWARRAY] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack.pop();"); //countは捨てる
-		jsCodes.push("vmStack.push([]);");
+		jsCodes.push("vmStack.push(new CappuccinoVM.ValueObject([]));");
 		return i + 3;
 	}
 
@@ -935,13 +1393,13 @@ new function()
 		var array = [];
 		if(dim >= 2)
 		{
-			var count = vmStack[vmStack.length - dim];
+			var count = vmStack[vmStack.length - dim].value;
 			for(var i = 0; i < count; i++)
 			{
 				array.push(makeArray(vmStack, dim-1));
 			}
 		}
-		return array;
+		return new ValueObject(array);
 	}
 
 	Method.instTable[MULTIANEWARRAY] = function(code, i, jsCodes)
@@ -951,66 +1409,75 @@ new function()
 		jsCodes.push("obj = CappuccinoVM.makeArray(vmStack, " + dim + ");");
 		for(j=0; j < dim; j++)
 			jsCodes.push("vmStack.pop();");
+		//jsCodes.push("CappuccinoVM.debugPrint('array=' + obj.value);");
 		jsCodes.push("vmStack.push(obj);");
 		return i + 4;
 	}
 
 	Method.instTable[LDC] = function(code, i, jsCodes, $cappuccino)
 	{
-		var constant = $cappuccino.constantPool[code[i+1]];
-		if(constant.tag == CONSTANT_STRING)
-		{
-			jsCodes.push("vmStack.push(CappuccinoVM.createJavaString('" + constant.value + "'));");
-		}
-		else
-		{
-			jsCodes.push("vmStack.push(" + constant.value + ");");
-		}
+		var cindex = code[i+1];
+		jsCodes.push("vmStack.push($cappuccino.constantPool[" + cindex + "].value.duplicate());");
 		return i + 2;
 	}
 
 	Method.instTable[LDC2_W] = function(code, i, jsCodes, $cappuccino)
 	{
-		var constant = $cappuccino.constantPool[get16BitsSigned((code[i+1] << 8) + code[i+2])];
-		jsCodes.push("vmStack.push(" + constant.value + ");");
+		//var constant = $cappuccino.constantPool[get16BitsSigned((code[i+1] << 8) + code[i+2])];
+		//jsCodes.push("vmStack.push(" + constant.value + ");");
+		var cindex = get16BitsSigned((code[i+1] << 8) + code[i+2]);
+		jsCodes.push("vmStack.push($cappuccino.constantPool[" + cindex + "].value.duplicate());");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);")
 		return i + 3;
 	}
 
-	Method.instTable[GETSTATIC] = function(code, i, jsCodes)
+	Method.instTable[GETSTATIC] = function(code, i, jsCodes, $cappuccino)
 	{
 		var index = (code[i+1] << 8) + code[i+2];
+		var valueClassName = $cappuccino.constantPool[index].valueClass.getClassName();
 		jsCodes.push("refjclass = CappuccinoVM.getJavaClass($cappuccino.constantPool[" + index + "].value.className);");
 		jsCodes.push("name = $cappuccino.constantPool[" + index + "].value.name;");
 		jsCodes.push("jclass = $cappuccino.findFieldOwner(name, refjclass);");
-		jsCodes.push("vmStack.push(jclass[name]);");
+		jsCodes.push("vmStack.push(jclass[name].duplicate());");
+		if(valueClassName == "ValueDouble" || valueClassName == "ValueLong")
+			jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
 		return i + 3;
 	}
 
-	Method.instTable[PUTSTATIC] = function(code, i, jsCodes)
+	Method.instTable[PUTSTATIC] = function(code, i, jsCodes, $cappuccino)
 	{
 		var index = (code[i+1] << 8) + code[i+2];
+		var valueClassName = $cappuccino.constantPool[index].valueClass.getClassName();
 		jsCodes.push("refjclass = CappuccinoVM.getJavaClass($cappuccino.constantPool[" + index + "].value.className);");
 		jsCodes.push("name = $cappuccino.constantPool[" + index + "].value.name;");
 		jsCodes.push("jclass = $cappuccino.findFieldOwner(name, refjclass);");
-		jsCodes.push("jclass[name]=vmStack.pop();");
+		if(valueClassName == "ValueDouble" || valueClassName == "ValueLong")
+			jsCodes.push("vmStack.pop();");
+		jsCodes.push("jclass[name]=vmStack.pop()");
 		return i + 3;
 	}
 
 	Method.instTable[GETFIELD] = function(code, i, jsCodes, $cappuccino)
 	{
-		var cindex = (code[i+1] << 8) + code[i+2];
-		var fname = $cappuccino.constantPool[cindex].value.name;
-		jsCodes.push("obj = vmStack.pop();");
-		jsCodes.push("vmStack.push(obj['" + fname + "']);");
+		var index = (code[i+1] << 8) + code[i+2];
+		var fname = $cappuccino.constantPool[index].value.name;
+		var valueClassName = $cappuccino.constantPool[index].valueClass.getClassName();
+		jsCodes.push("obj = vmStack.pop().value;");
+		jsCodes.push("vmStack.push(obj['" + fname + "'].duplicate());");
+		if(valueClassName == "ValueDouble" || valueClassName == "ValueLong")
+			jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
 		return i + 3;
 	}
 
 	Method.instTable[PUTFIELD] = function(code, i, jsCodes, $cappuccino)
 	{
-		var cindex = (code[i+1] << 8) + code[i+2];
-		var fname = $cappuccino.constantPool[cindex].value.name;
+		var index = (code[i+1] << 8) + code[i+2];
+		var fname = $cappuccino.constantPool[index].value.name;
+		var valueClassName = $cappuccino.constantPool[index].valueClass.getClassName();
+		if(valueClassName == "ValueDouble" || valueClassName == "ValueLong")
+			jsCodes.push("vmStack.pop();");
 		jsCodes.push("operand1 = vmStack.pop();");
-		jsCodes.push("obj = vmStack.pop();");
+		jsCodes.push("obj = vmStack.pop().value;");
 		jsCodes.push("obj['" + fname + "'] = operand1;");
 		return i + 3;
 	}
@@ -1032,7 +1499,7 @@ new function()
 		index = (code[i+1] << 8) + code[i+2];
 		jsCodes.push("methodref = $cappuccino.constantPool[" + index + "];");
 		jsCodes.push("sp = vmStack.length - methodref.paramLength - 1;");
-		jsCodes.push("method = vmStack[sp].constructor.$cappuccino.findMethod(methodref.value.name, methodref.value.descriptor);");
+		jsCodes.push("method = vmStack[sp].value.constructor.$cappuccino.findMethod(methodref.value.name, methodref.value.descriptor);");
 		jsCodes.push("return {action:'invoke', method:method, pc:" + (i+3) + "};");
 		return i + 3;
 	}
@@ -1054,9 +1521,16 @@ new function()
 		return i + 1;
 	}
 
-	Method.instTable[IRETURN] = function(code, i, jsCodes)
+	Method.instTable[IRETURN] = Method.instTable[FRETURN] = Method.instTable[ARETURN] =   function(code, i, jsCodes)
 	{
 		jsCodes.push("return {action:'returnValue', value:vmStack.pop()};");
+		return i + 1;
+	}
+
+	Method.instTable[DRETURN] = Method.instTable[LRETURN] = function(code, i, jsCodes)
+	{
+		jsCodes.push("vmStack.pop();");
+		jsCodes.push("return {action:'returnValueWide', value:vmStack.pop()};");
 		return i + 1;
 	}
 
@@ -1088,17 +1562,17 @@ new function()
 		while(i < code.length)
 		{
 			jsCodes.push("case " + i + ":");
+			//jsCodes.push("CappuccinoVM.debugPrint('pc=" + i + "');");
 			i = Method.instTable[code[i]](code, i, jsCodes, this.$cappuccino);
 		}
 		jsCodes.push("default: throw Error('Invalid pc?');");
 		jsCodes.push("}}");
 
-		/*
-		for(i = 0; i < jsCodes.length; i++)
-		{
-			debugPrint(jsCodes[i]);
-		}
-		*/
+		//debugPrint("//" + this.name);
+		//for(i = 0; i < jsCodes.length; i++)
+		//{
+		//	debugPrint(jsCodes[i]);
+		//}
 
 		this.compiledMethod = new Function(jsCodes.join("\n"));
 	}
@@ -1299,8 +1773,10 @@ new function()
 					break;
 
 				case CONSTANT_LONG:
-					//未実装
-					cpool.push(new ConstEmpty());
+					//仮の実装
+					c  = new ConstLong(classData[i], (classData[i+1] << 56) + (classData[i+2] << 48) + (classData[i+3] << 40) + (classData[i+4] << 32) + (classData[i+5] << 24) + (classData[i+6] << 16) + (classData[i+7] << 8) + classData[i+8]);
+					cpool.push(c);
+					//cpool.push(new ConstEmpty());
 					cpool.push(new ConstEmpty());
 					j++;
 					i += 9;
@@ -1494,6 +1970,7 @@ new function()
 				}
 			}
 			method.codeAttr = codeAttr;
+			//method.debugPrint();
 			javaClass.$cappuccino.addMethod(method);
 
 		}
@@ -1560,8 +2037,12 @@ new function()
 				this.currentMethod = ret.method;
 				this.stackTop = nextTop;
 				this.pc = 0;
+				//debugPrint("invoking " + ret.method.name)
+				//for(i = 0; i < this.vmStack.length; i++)
+				//	debugPrint(this.vmStack[i]);
+				//debugPrint("stackTop=" + nextTop);
 			}
-			else if(ret.action == "return" || ret.action == "returnValue")
+			else if(ret.action == "return" || ret.action == "returnValue" || ret.action == "returnValueWide")
 			{
 				if(this.currentMethod == this.firstMethod)
 				{
@@ -1584,13 +2065,17 @@ new function()
 					{
 						this.vmStack.push(ret.value);
 					}
+					else if(ret.action == "returnValueWide")
+					{
+						this.vmStack.push(ret.value);
+						this.vmStack.push(valueDummy);
+					}
 				}
 			}
 		}
 	}
 
 	//スレッドが終了するまでリターンしない
-	//(汚いかな…)
 	JavaThread.prototype.runNoReturn = function()
 	{
 		var cfunc, ret, nextTop, numLocals, i, r, oldLength;
@@ -1658,8 +2143,11 @@ new function()
 	}
 
 	//組み込みクラスの定義
+	//java/lang/Object
 	var JavaObject = function() {}
+
 	JavaObject.$cappuccino = new CVMInfo(JavaObject);
+
 	var objectInit = new Method(0x00, '<init>', '()V');
 	objectInit.codeAttr = new Code(0, 1, null);
 	objectInit.compiledMethod = function(javaThread)
@@ -1667,9 +2155,12 @@ new function()
 		//debugPrint("object init");
 		return {action: "return"};
 	}
+	
 	JavaObject.$cappuccino.addMethod(objectInit);
+
 	classHash['java/lang/Object'] = JavaObject;
 
+	//java/io/PrintStrem
 	var PrintStream = function() {}
 	PrintStream.$cappuccino = new CVMInfo(PrintStream);
 	var printlnInt = new Method(0x00, 'println', '(I)V');
@@ -1678,37 +2169,49 @@ new function()
 	{
 		var vmStack = javaThread.vmStack;
 		var stackTop = javaThread.stackTop;
-		debugPrint(vmStack[stackTop+1]);
+		debugPrint(vmStack[stackTop+1].value);
 		return {action:"return"};
 	}
 	PrintStream.$cappuccino.addMethod(printlnInt);
+
 	var printlnString = new Method(0x00, "println", "(Ljava/lang/String;)V");
 	printlnString.codeAttr = new Code(0, 2, null);
 	printlnString.compiledMethod = function(javaThread)
 	{
 		var vmStack = javaThread.vmStack;
 		var stackTop = javaThread.stackTop;
-		debugPrint(vmStack[stackTop+1].toString());
+		debugPrint(vmStack[stackTop+1].value.toString());
 		return {action:"return"};
 	}
 	PrintStream.$cappuccino.addMethod(printlnString);
+
 	var printlnFloat = new Method(0x0000, "println", "(F)V");
 	printlnFloat.codeAttr = new Code(0, 2, null);
 	printlnFloat.compiledMethod = printlnInt.compiledMethod;
 	PrintStream.$cappuccino.addMethod(printlnFloat);
+
 	var printlnDouble = new Method(0x0000, "println", "(D)V");
-	printlnDouble.codeAttr = new Code(0, 2, null);
+	printlnDouble.codeAttr = new Code(0, 3, null);
 	printlnDouble.compiledMethod = printlnInt.compiledMethod;
 	PrintStream.$cappuccino.addMethod(printlnDouble);
+
+	var printlnLong = new Method(0x0000, "println", "(J)V");
+	printlnLong.codeAttr = new Code(0, 3, null);
+	printlnLong.compiledMethod = printlnInt.compiledMethod;
+	PrintStream.$cappuccino.addMethod(printlnLong);
+
 	classHash["java/io/PrintStream"] = PrintStream;
 
+	//java/lang/String
 	var JavaString = function() {}
 	JavaString.$cappuccino = new CVMInfo(JavaString);
+
 	//これはJavaのtoStringではなくJavaScriptのtoString(ややこしいな…)
 	JavaString.prototype.toString = function()
 	{
 		return this.str;
 	}
+
 	var stringInit = new Method(0x0000, "<init>", "(Ljava/lang/String;)V");
 	stringInit.codeAttr = new Code(0, 2, null);
 	stringInit.compiledMethod = function(javaThread)
@@ -1722,6 +2225,7 @@ new function()
 	}
 	JavaString.$cappuccino.addMethod(stringInit);
 	classHash['java/lang/String'] = JavaString;
+
 	var createJavaString = function(str)
 	{
 		var javaString = new JavaString();
@@ -1729,6 +2233,7 @@ new function()
 		return javaString;
 	}
 
+	//java/lang/StringBuffer
 	var StringBuilder = function() {};
 	StringBuilder.$cappuccino = new CVMInfo(StringBuilder);
 	var sbInit = new Method(0x0000, "<init>", "()V");
@@ -1737,67 +2242,85 @@ new function()
 	{
 		var vmStack = javaThread.vmStack;
 		var stackTop = javaThread.stackTop;
-		vmStack[stackTop].str = "";
+		vmStack[stackTop].value.str = "";
 		return {action:"return"};
 	}
 	StringBuilder.$cappuccino.addMethod(sbInit);
+
 	var sbInitStr = new Method(0x0000, "<init>", "(Ljava/lang/String;)V");
 	sbInitStr.codeAttr = new Code(0, 2, null);
 	sbInitStr.compiledMethod = function(javaThread)
 	{
 		var vmStack = javaThread.vmStack;
 		var stackTop = javaThread.stackTop;
-		vmStack[stackTop].str = vmStack[stackTop+1].str;
+		vmStack[stackTop].value.str = vmStack[stackTop+1].value.str;
 		return {action:"return"};
 	}
 	StringBuilder.$cappuccino.addMethod(sbInitStr);
+
 	var appendInt = new Method(0x000, "append", "(I)Ljava/lang/StringBuilder;");
 	appendInt.codeAttr = new Code(0, 2, null);
 	appendInt.compiledMethod = function(javaThread)
 	{
 		var vmStack = javaThread.vmStack;
 		var stackTop = javaThread.stackTop;
-		var thisObj = vmStack[stackTop];
-		var arg = vmStack[stackTop+1];
+		var thisObj = vmStack[stackTop].value;
+		var arg = vmStack[stackTop+1].value;
 		thisObj.str = thisObj.str + arg;
-		return {action:"returnValue", value:thisObj};
+		return {action:"returnValue", value:new ValueObject(thisObj)};
 	}
 	StringBuilder.$cappuccino.addMethod(appendInt);
+
 	var appendFloat = new Method(0x0000, "append", "(F)Ljava/lang/StringBuilder;");
 	appendFloat.codeAttr = new Code(0, 2, null);
 	appendFloat.compiledMethod = appendInt.compiledMethod;
 	StringBuilder.$cappuccino.addMethod(appendFloat);
+
 	var appendDouble = new Method(0x0000, "append", "(D)Ljava/lang/StringBuilder;");
-	appendDouble.codeAttr = new Code(0, 2, null);
+	appendDouble.codeAttr = new Code(0, 3, null);
 	appendDouble.compiledMethod = appendInt.compiledMethod;
 	StringBuilder.$cappuccino.addMethod(appendDouble);
+
 	var appendString = new Method(0x0000, "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;");
 	appendString.codeAttr = new Code(0, 2, null);
 	appendString.compiledMethod = function(javaThread)
 	{
 		var vmStack = javaThread.vmStack;
 		var stackTop = javaThread.stackTop;
-		var thisObj = vmStack[stackTop];
-		var arg = vmStack[stackTop+1];
+		var thisObj = vmStack[stackTop].value;
+		var arg = vmStack[stackTop+1].value;
 		thisObj.str = thisObj.str + arg.str;
-		return {action:"returnValue", value:thisObj};
+		return {action:"returnValue", value:new ValueObject(thisObj)};
 	}
 	StringBuilder.$cappuccino.addMethod(appendString);
+
 	var sbToString = new Method(0x0000, "toString", "()Ljava/lang/String;");
 	sbToString.codeAttr = new Code(0, 1, null);
 	sbToString.compiledMethod = function(javaThread)
 	{
 		var vmStack = javaThread.vmStack;
 		var stackTop = javaThread.stackTop;
-		var javaString = createJavaString(vmStack[stackTop].str);
-		return {action:"returnValue", value:javaString};
+		var javaString = createJavaString(vmStack[stackTop].value.str);
+		return {action:"returnValue", value:new ValueObject(javaString)};
 	}
 	StringBuilder.$cappuccino.addMethod(sbToString);
+
 	classHash["java/lang/StringBuilder"] = StringBuilder;
 
+	//java/lang/System
 	var System = function() {}
 	System.$cappuccino = new CVMInfo(System);
-	System.out = new PrintStream();
+	System.out = new ValueObject(new PrintStream());
+
+        var currentTimeMillis = new Method(0x0008, "currentTimeMillis", "()J");
+	currentTimeMillis.codeAttr = new Code(0, 0, null);
+	currentTimeMillis.compiledMethod = function(javaThread)
+	{
+		var dd = new Date();
+		return {action: "returnValueWide", value:new ValueLong(dd.getTime())}
+	}
+	System.$cappuccino.addMethod(currentTimeMillis);
+
 	classHash["java/lang/System"] = System;
 
 	//グローバル名前空間オブジェクト
@@ -1813,6 +2336,12 @@ new function()
 		debugPrint: debugPrint,
 		getJavaClass: getJavaClass,
 		makeArray: makeArray,
-		createJavaString: createJavaString
+		createJavaString: createJavaString,
+		ValueInteger: ValueInteger,
+		ValueFloat: ValueFloat,
+		ValueDouble: ValueDouble,
+		ValueObject: ValueObject,
+		ValueDummy: ValueDummy,
+		valueDummy: valueDummy
 	}
 }
