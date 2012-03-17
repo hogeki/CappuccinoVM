@@ -1,5 +1,4 @@
 CappuccinoVMはJavaScriptによって実装されたJavaVirtualMachineです。プラグインに頼らずにJavaScriptだけで全部実装しているのがJavaアプレットとの違いです。最終的には多くのWebブラウザ上で動作するようにしたいと思っていますが、今のところChromeのver.15以上(?)でないと動作しません。
-FireFoxのver.10では動作しませんが、Nightly Buildの12では動作するようです。HTML5の実装にばらつきがあるのが悪いんです…
 
 使い方:
 とりあえずHelloWorldしてみましょう。
@@ -40,8 +39,7 @@ HelloWorld.classをcappuccino_vm.jsといっしょにWebサーバーで公開さ
 
 仕組み:
 CappuccinoVM.startMain('HelloWorld');
-これが実行されるとCappuccinoVMはHelloWorld.classをサーバーからダウンロードしてきます。そしてクラスファイルを解析し、JavaバイトコードをJavaScritpに変換して実行します。いわゆるJITコンパイラです(むしろJIT逆コンパイラと言うべきか?)。
-
+これが実行されるとCappuccinoVMはHelloWorld.classをサーバーからダウンロードしてきます。そしてクラスファイルを解析し、JavaバイトコードをJavaScritpに変換して実行します。いわゆるJITコンパイラです。
 
 現在の進捗:
 JavaVMの命令の半分程度を実装しています。簡単な処理を行って結果をSystem.out.printlnすることはできます。longは使えませんがint,float,doubleなどは使えます。
@@ -50,10 +48,5 @@ JavaVMの命令の半分程度を実装しています。簡単な処理を行�
 マルチスレッド
 例外処理
 Swing
-WebStorageを使った仮想ファイルシステムのようなもの
+WebStorageを使った仮想ファイルシステムのようなもの(dropboxとかのクラウドストレージも使えるか?)
 Android,iOS対応
-
-
-
-
-

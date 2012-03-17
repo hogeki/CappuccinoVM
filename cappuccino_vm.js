@@ -392,6 +392,51 @@ new function()
 		this.value /= x.value;
 	}
 
+	ValueInteger.prototype.rem = function(x)
+	{
+		this.value %= x.value;
+	}
+
+	ValueInteger.prototype.neg = function()
+	{
+		this.value *= -1;
+	}
+
+	ValueInteger.prototype.inc = function(i)
+	{
+		this.value += i;
+	}
+
+	ValueInteger.prototype.shl = function(x)
+	{
+		this.value <<= x.value;	
+	}
+
+	ValueInteger.prototype.shr = function(x)
+	{
+		this.value >>= x.value;
+	}
+
+	ValueInteger.prototype.ushr = function(x)
+	{
+		this.value >>>= x.value;
+	}
+
+	ValueInteger.prototype.and = function(x)
+	{
+		this.value &= x.value;
+	}
+
+	ValueInteger.prototype.or = function(x)
+	{
+		this.value |= x.value;
+	}
+
+	ValueInteger.prototype.xor = function()
+	{
+		this.value ^= x.value;
+	}
+
 	ValueInteger.getClassName = function()
 	{
 		return "ValueInteger";
@@ -427,6 +472,11 @@ new function()
 		this.value /= x.value;
 	}
 
+	ValueFloat.prototype.neg = function()
+	{
+		this.value *= -1.0;
+	}
+
 	ValueFloat.getClassName = function()
 	{
 		return "ValueFloat";
@@ -460,6 +510,11 @@ new function()
 	ValueDouble.prototype.div = function(x)
 	{
 		this.value /= x.value;
+	}
+
+	ValueDouble.prototype.neg = function()
+	{
+		this.value *= -1.0;
 	}
 
 	ValueDouble.getClassName = function()
@@ -875,8 +930,14 @@ new function()
 
 	Method.instTable[DUP2] = function(code, i, jsCodes)
 	{
+		jsCodes.push("operand1 = vmStack[vmStack.length-2].constructor.getClassName();");
+		//jsCodes.push("CappuccinoVM.debugPrint('dup2:' +  operand1);");
+		jsCodes.push("if((operand1 == 'ValueInteger') || (operand1 == 'ValueFloat') || (operand1 == 'ValueObject')){");
 		jsCodes.push("vmStack.push(vmStack[vmStack.length-2].duplicate());");
 		jsCodes.push("vmStack.push(vmStack[vmStack.length-2].duplicate());");
+		jsCodes.push("}else{"); //Long, Double
+		jsCodes.push("vmStack.push(vmStack[vmStack.length-2].duplicate());");
+		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);}");
 		return i + 1;
 	}
 
@@ -1152,7 +1213,8 @@ new function()
 
 	Method.instTable[IINC] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack[stackTop+" + code[i+1] + "].value+=" + get8BitsSigned(code[i+2]) + ";");
+		//jsCodes.push("vmStack[stackTop+" + code[i+1] + "].value+=" + get8BitsSigned(code[i+2]) + ";");
+		jsCodes.push("vmStack[stackTop+" + code[i+1] + "].inc(" + get8BitsSigned(code[i+2]) + ");");
 		return i + 3;
 	}
 
@@ -1234,25 +1296,20 @@ new function()
 
 	Method.instTable[IREM] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop().value;");
-		jsCodes.push("operand1 = vmStack.pop().value;");
-		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 % operand2));");
+		jsCodes.push("vmStack[vmStack.length-2].rem(vmStack[vmStack.length-1]);");
+		jsCodes.push("vmStack.pop();");
 		return i + 1;
 	}
 
-	Method.instTable[INEG] = function(code, i, jsCodes)
+	Method.instTable[INEG] = Method.instTable[FNEG] =  function(code, i, jsCodes)
 	{
-		jsCodes.push("operand1 = vmStack.pop().value;");
-		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 * -1));");
+		jsCodes.push("vmStack[vmStack.length-1].neg();");
 		return i + 1;
 	}
 
 	Method.instTable[DNEG] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack.pop();");
-		jsCodes.push("operand1 = vmStack.pop().value;");
-		jsCodes.push("vmStack.push(new CappuccinoVM.ValueDouble(operand1 * -1));");
-		jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
+		jsCodes.push("vmStack[vmStack.length-2].neg();");
 		return i + 1;
 	}
 
@@ -1270,49 +1327,43 @@ new function()
 
 	Method.instTable[ISHL] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop().value;");
-		jsCodes.push("operand1 = vmStack.pop().value;");
-		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 << operand2));");
+		jsCodes.push("vmStack[vmStack.length-2].shl(vmStack[vmStack.length-1]);");
+		jsCodes.push("vmStack.pop();");
 		return i + 1;
 	}
 
 	Method.instTable[ISHR] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop().value;");
-		jsCodes.push("operand1 = vmStack.pop().value;");
-		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 >> operand2));");
+		jsCodes.push("vmStack[vmStack.length-2].shr(vmStack[vmStack.length-1]);");
+		jsCodes.push("vmStack.pop();");
 		return i + 1;
 	}
 
 	Method.instTable[IUSHR] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop().value;");
-		jsCodes.push("operand1 = vmStack.pop().value;");
-		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 >>> operand2));");
+		jsCodes.push("vmStack[vmStack.length-2].ushr(vmStack[vmStack.length-1]);");
+		jsCodes.push("vmStack.pop();");
 		return i + 1;
 	}
 
 	Method.instTable[IAND] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop().value;");
-		jsCodes.push("operand1 = vmStack.pop().value;");
-		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 & operand2));");
+		jsCodes.push("vmStack[vmStack.length-2].and(vmStack[vmStack.length-1]);");
+		jsCodes.push("vmStack.pop();");
 		return i + 1;
 	}
 
 	Method.instTable[IOR] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop().value;");
-		jsCodes.push("operand1 = vmStack.pop().value;");
-		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 | operand2));");
+		jsCodes.push("vmStack[vmStack.length-2].or(vmStack[vmStack.length-1]);");
+		jsCodes.push("vmStack.pop();");
 		return i + 1;
 	}
 
 	Method.instTable[IXOR] = function(code, i, jsCodes)
 	{
-		jsCodes.push("operand2 = vmStack.pop().value;");
-		jsCodes.push("operand1 = vmStack.pop().value;");
-		jsCodes.push("vmStack.push(new CappuccinoVM.ValueInteger(operand1 ^ operand2));");
+		jsCodes.push("vmStack[vmStack.length-2].xor(vmStack[vmStack.length-1]);");
+		jsCodes.push("vmStack.pop();");
 		return i + 1;
 	}
 
