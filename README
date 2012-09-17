@@ -1,4 +1,4 @@
-CappuccinoVMはJavaScriptによって実装されたJavaVirtualMachineです。プラグインに頼らずにJavaScriptだけで全部実装しているのがJavaアプレットとの違いです。最終的には多くのWebブラウザ上で動作するようにしたいと思っていますが、今のところChromeのver.15以上(?)でないと動作しません。
+CappuccinoVMはJavaScriptによって実装されたJavaVirtualMachineです。プラグインに頼らずにJavaScriptだけで全部実装しているのがJavaアプレットとの違いです。最近のバージョンのChromeかFirefoxなら動くと思います(しかしFirefoxだと妙に遅い)。
 
 使い方:
 とりあえずHelloWorldしてみましょう。
@@ -21,17 +21,19 @@ HelloWorld.classをcappuccino_vm.jsといっしょにWebサーバーで公開さ
 
 <!doctype html>
 <html>
-        <head>
-                <meta charset="utf-8">
-                <title>HelloWorld by CappuccinoVM</title>
-                <script type="text/javascript" src="cappuccino_vm.js"></script>
-        </head>
-        <body>
-                <script type="text/javascript">
-                //java HelloWorldに相当する
-                CappuccinoVM.startMain('HelloWorld');
-                </script>
-        <body>
+	<head>
+		<meta charset="utf-8">
+		<title>CappuccinoVM test</title>
+		<script type="text/javascript" src="cappuccino_vm.js"></script>
+		<script type="text/javascript">
+		function VMStart()
+		{
+			CappuccinoVM.startMain('HelloWorld');
+		}
+		</script>
+	</head>
+	<body onload="VMStart()">
+	<body>
 </html>
 
 このページをWebブラウザで開くと…何も表示されません。
