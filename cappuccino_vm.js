@@ -267,19 +267,36 @@ new function()
 		debubPrint("Integer " + this.value);
 	}
 
-	var ConstLong = function(tag, bytes)
+	var ConstLong = function(tag, high, low)
 	{
+		var tmp;
 		this.tag = tag;
-		this.value = bytes;
-		//debugPrint("ConstLong:" + bytes);
-		//this.value = new ValueLong(bytes);
+		//32bitずつhighとlowに分けて格納
+		//符号はhighのbit32に持たせる(2の補数表現ではない)
+		//オペランドスタック上ではhighが上でlowが下
+		if(high & 0x80000000)
+		{
+			//負の数なので絶対値を取り出す
+			//ビットを反転して1足す
+			high = ~high >>> 0;
+			low = ~low >>> 0;
+			low = low + 1;
+			if( low > 0xffffffff)
+			{
+				low = 0;
+				high = high + 1;
+			}
+			high += Math.pow(2, 32);
+		}
+		this.high = high;
+		this.low = low >>> 0;
 	}
 
 	ConstLong.prototype.resolve = function(cpool) {}
 
 	ConstLong.prototype.debugPrint = function()
 	{
-		debugPrint("Long " + this.value);
+		debugPrint("Long " + this.low);
 	}
 
 	var ConstFloat = function(tag, bytes)
@@ -514,7 +531,7 @@ new function()
 	const L2F = 0x89;
 	const L2D = 0x8a;
 	const F2I = 0x8b;
-	const F2L = 0x8b;
+	const F2L = 0x8c;
 	const F2D = 0x8d;
 	const D2I = 0x8e;
 	const D2L = 0x8f;
@@ -589,6 +606,7 @@ new function()
 	{
 		jsCodes.push("thread.stackPtr-=2;");
 		jsCodes.push("vmStack[stackBase+" + code[i+1] + "] = vmStack[thread.stackPtr];");
+		jsCodes.push("vmStack[stackBase+" + (code[i+1] + 1) + "] = vmStack[thread.stackPtr+1];");
 		return i + 2;
 	}
 
@@ -602,6 +620,7 @@ new function()
 	{
 		jsCodes.push("thread.stackPtr-=2");
 		jsCodes.push("vmStack[stackBase] = vmStack[thread.stackPtr];");
+		jsCodes.push("vmStack[stackBase+1] = vmStack[thread.stackPtr+1];");
 		return i + 1;
 	}
 
@@ -615,6 +634,7 @@ new function()
 	{
 		jsCodes.push("thread.stackPtr-=2;");
 		jsCodes.push("vmStack[stackBase+1] = vmStack[thread.stackPtr];");
+		jsCodes.push("vmStack[stackBase+2] = vmStack[thread.stackPtr+1];");
 		return i + 1;
 	}
 
@@ -628,6 +648,7 @@ new function()
 	{
 		jsCodes.push("thread.stackPtr-=2;");
 		jsCodes.push("vmStack[stackBase+2] = vmStack[thread.stackPtr];");
+		jsCodes.push("vmStack[stackBase+3] = vmStack[thread.stackPtr+1];");
 		return i + 1;
 	}
 
@@ -641,6 +662,7 @@ new function()
 	{
 		jsCodes.push("thread.stackPtr-=2;");
 		jsCodes.push("vmStack[stackBase+3] = vmStack[thread.stackPtr];");
+		jsCodes.push("vmStack[stackBase+4] = vmStack[thread.stackPtr+1];");
 		return i + 1;
 	}
 
@@ -655,7 +677,7 @@ new function()
 		//jsCodes.push("vmStack.push(vmStack[stackTop+" + code[i+1] +"].duplicate());");
 		//jsCodes.push("vmStack.push(CappuccinoVM.valueDummy);");
 		jsCodes.push("vmStack[thread.stackPtr] = vmStack[stackBase+" + code[i+1] + "];"); 
-		jsCodes.push("vmStack[thread.stackPtr+1] = 0;"); 
+		jsCodes.push("vmStack[thread.stackPtr+1] = vmStack[stackBase+" + (code[i+1]+1)+ "];"); 
 		jsCodes.push("thread.stackPtr+=2;");
 		return i + 2;
 	}
@@ -669,7 +691,7 @@ new function()
 	Method.instTable[DLOAD_0] = Method.instTable[LLOAD_0] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack[thread.stackPtr] = vmStack[stackBase];"); 
-		jsCodes.push("vmStack[thread.stackPtr+1] = 0;"); 
+		jsCodes.push("vmStack[thread.stackPtr+1] = vmStack[stackBase+1];"); 
 		jsCodes.push("thread.stackPtr+=2;");
 		return i + 1;
 	}
@@ -683,7 +705,7 @@ new function()
 	Method.instTable[DLOAD_1] = Method.instTable[LLOAD_1] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack[thread.stackPtr] = vmStack[stackBase+1];"); 
-		jsCodes.push("vmStack[thread.stackPtr+1] = 0;"); 
+		jsCodes.push("vmStack[thread.stackPtr+1] = vmStack[stackBase+2];"); 
 		jsCodes.push("thread.stackPtr+=2;");
 		return i + 1;
 	}
@@ -697,7 +719,7 @@ new function()
 	Method.instTable[DLOAD_2] = Method.instTable[LLOAD_2] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack[thread.stackPtr] = vmStack[stackBase+2];"); 
-		jsCodes.push("vmStack[thread.stackPtr+1] = 0;"); 
+		jsCodes.push("vmStack[thread.stackPtr+1] = vmStack[stackBase+3];"); 
 		jsCodes.push("thread.stackPtr+=2;");
 		return i + 1;
 	}
@@ -711,7 +733,7 @@ new function()
 	Method.instTable[DLOAD_3] = Method.instTable[LLOAD_3] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack[thread.stackPtr] = vmStack[stackBase+3];"); 
-		jsCodes.push("vmStack[thread.stackPtr+1] = 0;"); 
+		jsCodes.push("vmStack[thread.stackPtr+1] = vmStack[stackBase+4];"); 
 		jsCodes.push("thread.stackPtr+=2;");
 		return i + 1;
 	}
@@ -725,13 +747,23 @@ new function()
 		return i + 1;
 	}
 
-	Method.instTable[DASTORE] = Method.instTable[LASTORE] =  function(code, i, jsCodes)
+	Method.instTable[DASTORE] = function(code, i, jsCodes)
 	{
 		jsCodes.push("--thread.stackPtr;");
 		jsCodes.push("operand2 = vmStack[--thread.stackPtr];");
 		jsCodes.push("operand1 = vmStack[--thread.stackPtr];");
 		jsCodes.push("obj = vmStack[--thread.stackPtr];");
 		jsCodes.push("obj[operand1] = operand2;");
+		return i + 1;
+	}
+
+	Method.instTable[LASTORE] = function(code, i, jsCodes)
+	{
+		jsCodes.push("operand2 = {high:vmStack[thread.stackPtr-1], low:vmStack[thread.stackPtr-2]};");
+		jsCodes.push("operand1 = vmStack[thread.stackPtr-3];");
+		jsCodes.push("obj = vmStack[thread.stackPtr-4];");
+		jsCodes.push("obj[operand1] = operand2;");
+		jsCodes.push("thread.stackPtr -= 4;");
 		return i + 1;
 	}
 
@@ -743,12 +775,21 @@ new function()
 		return i + 1;
 	}
 
-	Method.instTable[DALOAD] = Method.instTable[LALOAD] = function(code, i, jsCodes)
+	Method.instTable[DALOAD] = function(code, i, jsCodes)
 	{
 		jsCodes.push("operand1 = vmStack[thread.stackPtr-1];");
 		jsCodes.push("obj = vmStack[thread.stackPtr-2];");
 		jsCodes.push("vmStack[thread.stackPtr-2] = obj[operand1];");
 		jsCodes.push("vmStack[thread.stackPtr-1] = 0;");
+		return i + 1;
+	}
+
+	Method.instTable[LALOAD] = function(code, i, jsCodes)
+	{
+		jsCodes.push("operand1 = vmStack[thread.stackPtr-1];");
+		jsCodes.push("obj = vmStack[thread.stackPtr-2];");
+		jsCodes.push("vmStack[thread.stackPtr-2] = obj[operand1].low;");
+		jsCodes.push("vmStack[thread.stackPtr-1] = obj[operand1].high;");
 		return i + 1;
 	}
 
@@ -1085,9 +1126,19 @@ new function()
 		return i + 1;
 	}
 
-	Method.instTable[DADD] = Method.instTable[LADD] = function(code, i, jsCodes)
+
+	Method.instTable[DADD] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack[thread.stackPtr-4] += vmStack[thread.stackPtr-2];");
+		jsCodes.push("thread.stackPtr-=2;");
+		return i + 1;
+	}
+
+	Method.instTable[LADD] = function(code, i, jsCodes)
+	{
+		jsCodes.push("obj=CappuccinoVM.doAddLong(vmStack[thread.stackPtr-3], vmStack[thread.stackPtr-4], vmStack[thread.stackPtr-1], vmStack[thread.stackPtr-2]);");
+		jsCodes.push("vmStack[thread.stackPtr-4]=obj.low;");
+		jsCodes.push("vmStack[thread.stackPtr-3]=obj.high;");
 		jsCodes.push("thread.stackPtr-=2;");
 		return i + 1;
 	}
@@ -1099,9 +1150,18 @@ new function()
 		return i + 1;
 	}
 
-	Method.instTable[DSUB] = Method.instTable[LSUB] = function(code, i, jsCodes)
+	Method.instTable[DSUB] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack[thread.stackPtr-4] -= vmStack[thread.stackPtr-2];");
+		jsCodes.push("thread.stackPtr-=2;");
+		return i + 1;
+	}
+
+	Method.instTable[LSUB] = function(code, i, jsCodes)
+	{
+		jsCodes.push("obj=CappuccinoVM.doSubLong(vmStack[thread.stackPtr-3], vmStack[thread.stackPtr-4], vmStack[thread.stackPtr-1], vmStack[thread.stackPtr-2]);");
+		jsCodes.push("vmStack[thread.stackPtr-4]=obj.low;");
+		jsCodes.push("vmStack[thread.stackPtr-3]=obj.high;");
 		jsCodes.push("thread.stackPtr-=2;");
 		return i + 1;
 	}
@@ -1113,9 +1173,18 @@ new function()
 		return i + 1;
 	}
 
-	Method.instTable[DMUL] = Method.instTable[LMUL] = function(code, i, jsCodes)
+	Method.instTable[DMUL] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack[thread.stackPtr-4] *= vmStack[thread.stackPtr-2];");
+		jsCodes.push("thread.stackPtr-=2;");
+		return i + 1;
+	}
+
+	Method.instTable[LMUL] = function(code, i, jsCodes)
+	{
+		jsCodes.push("obj=CappuccinoVM.doMulLong(vmStack[thread.stackPtr-3], vmStack[thread.stackPtr-4], vmStack[thread.stackPtr-1], vmStack[thread.stackPtr-2]);");
+		jsCodes.push("vmStack[thread.stackPtr-4]=obj.low;");
+		jsCodes.push("vmStack[thread.stackPtr-3]=obj.high;");
 		jsCodes.push("thread.stackPtr-=2;");
 		return i + 1;
 	}
@@ -1127,9 +1196,18 @@ new function()
 		return i + 1;
 	}
 
-	Method.instTable[DDIV] = Method.instTable[LDIV] = function(code, i, jsCodes)
+	Method.instTable[DDIV] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack[thread.stackPtr-4] /= vmStack[thread.stackPtr-2];");
+		jsCodes.push("thread.stackPtr-=2;");
+		return i + 1;
+	}
+
+	Method.instTable[LDIV] = function(code, i, jsCodes)
+	{
+		jsCodes.push("obj=CappuccinoVM.doDivLong(vmStack[thread.stackPtr-3], vmStack[thread.stackPtr-4], vmStack[thread.stackPtr-1], vmStack[thread.stackPtr-2]);");
+		jsCodes.push("vmStack[thread.stackPtr-4]=obj.lowQuot;");
+		jsCodes.push("vmStack[thread.stackPtr-3]=obj.highQuot;");
 		jsCodes.push("thread.stackPtr-=2;");
 		return i + 1;
 	}
@@ -1143,7 +1221,9 @@ new function()
 
 	Method.instTable[LREM] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack[thread.stackPtr-4] %= vmStack[thread.stackPtr-2];");
+		jsCodes.push("obj=CappuccinoVM.doDivLong(vmStack[thread.stackPtr-3], vmStack[thread.stackPtr-4], vmStack[thread.stackPtr-1], vmStack[thread.stackPtr-2]);");
+		jsCodes.push("vmStack[thread.stackPtr-4]=obj.lowMod;");
+		jsCodes.push("vmStack[thread.stackPtr-3]=obj.highMod;");
 		jsCodes.push("thread.stackPtr-=2;");
 		return i + 1;
 	}
@@ -1154,21 +1234,25 @@ new function()
 		return i + 1;
 	}
 
-	Method.instTable[DNEG] = Method.instTable[LNEG] = function(code, i, jsCodes)
+	Method.instTable[DNEG] = function(code, i, jsCodes)
 	{
 		jsCodes.push("vmStack[thread.stackPtr-2] *= -1;");
 		return i + 1;
 	}
 
+	Method.instTable[LNEG] = function(code, i, jsCodes)
+	{
+		jsCodes.push("obj=CappuccinoVM.doMulLong(vmStack[thread.stackPtr-1], vmStack[thread.stackPtr-2], Math.pow(2, 32), 1);");
+		jsCodes.push("vmStack[thread.stackPtr-2]=obj.low;");
+		jsCodes.push("vmStack[thread.stackPtr-1]=obj.high;");
+		return i + 1;
+	}
+
 	Method.instTable[LCMP] = function(code, i, jsCodes)
 	{
-		jsCodes.push("thread.stackPtr--;");
-		jsCodes.push("operand2 = vmStack[--thread.stackPtr];");
-		jsCodes.push("thread.stackPtr--;");
-		jsCodes.push("operand1 = vmStack[--thread.stackPtr];");
-		jsCodes.push("if(operand1 > operand2){vmStack[thread.stackPtr++] = 1;}")
-		jsCodes.push("else if(operand1 == operand2){vmStack[thread.stackPtr++] = 0;}");
-		jsCodes.push("else {vmStack[thread.stackPtr++] = -1;}");
+		jsCodes.push("operand1=CappuccinoVM.doCmpLong(vmStack[thread.stackPtr-3], vmStack[thread.stackPtr-4], vmStack[thread.stackPtr-1], vmStack[thread.stackPtr-2]);");
+		jsCodes.push("vmStack[thread.stackPtr-4] = operand1")
+		jsCodes.push("thread.stackPtr-=3;");
 		return i + 1;
 	}
 
@@ -1193,7 +1277,19 @@ new function()
 
 	Method.instTable[LSHL] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack[thread.stackPtr-3] <<= vmStack[thread.stackPtr-1];");
+		jsCodes.push("operand1 = CappuccinoVM.getOpponentFromSign({high:vmStack[thread.stackPtr-2], low:vmStack[thread.stackPtr-3]});");
+		jsCodes.push("operand2 = vmStack[thread.stackPtr-1];");
+		jsCodes.push("if(operand2 < 32) {");
+		jsCodes.push("mask = (~0 >>> 0) << (32-operand2);");
+		jsCodes.push("operand1.high = ((operand1.high << operand2) | ((operand1.low & mask) >>> (32-operand2))) >>> 0;");
+		jsCodes.push("operand1.low = (operand1.low << operand2) >>> 0;");
+		jsCodes.push("}else{");
+		jsCodes.push("operand1.high = (operand1.low << (operand2 - 32)) >>> 0;");
+		jsCodes.push("operand1.low = 0;");
+		jsCodes.push("}");
+		jsCodes.push("operand1 = CappuccinoVM.getSignFromOpponent(operand1);");
+		jsCodes.push("vmStack[thread.stackPtr-2] = operand1.high;");
+		jsCodes.push("vmStack[thread.stackPtr-3] = operand1.low;");
 		jsCodes.push("thread.stackPtr--;");
 		return i + 1;
 	}
@@ -1207,7 +1303,20 @@ new function()
 
 	Method.instTable[LSHR] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack[thread.stackPtr-3] >>= vmStack[thread.stackPtr-1];");
+		jsCodes.push("operand1 = CappuccinoVM.getOpponentFromSign({high:vmStack[thread.stackPtr-2], low:vmStack[thread.stackPtr-3]});");
+		jsCodes.push("operand2 = vmStack[thread.stackPtr-1];");
+		jsCodes.push("if(operand2 < 32) {");
+		jsCodes.push("mask = (~0 >>> 0) >>> (32-operand2);");
+		jsCodes.push("operand1.low = ((operand1.low >>> operand2) | ((operand1.high & mask) << (32-operand2))) >>> 0;");
+		jsCodes.push("operand1.high = (operand1.high >> operand2) >>> 0;");
+		jsCodes.push("}else{");
+		jsCodes.push("operand1.low = (operand1.high >> (operand2 - 32)) >>> 0;");
+		jsCodes.push("if(operand1.high & 0x80000000){operand1.high = 0xffffffff;}");
+		jsCodes.push("else{operand1.high = 0;}");
+		jsCodes.push("}");
+		jsCodes.push("operand1 = CappuccinoVM.getSignFromOpponent(operand1);");
+		jsCodes.push("vmStack[thread.stackPtr-2] = operand1.high;");
+		jsCodes.push("vmStack[thread.stackPtr-3] = operand1.low;");
 		jsCodes.push("thread.stackPtr--;");
 		return i + 1;
 	}
@@ -1221,7 +1330,19 @@ new function()
 
 	Method.instTable[LUSHR] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack[thread.stackPtr-3] >>>= vmStack[thread.stackPtr-1];");
+		jsCodes.push("operand1 = CappuccinoVM.getOpponentFromSign({high:vmStack[thread.stackPtr-2], low:vmStack[thread.stackPtr-3]});");
+		jsCodes.push("operand2 = vmStack[thread.stackPtr-1];");
+		jsCodes.push("if(operand2 < 32) {");
+		jsCodes.push("mask = (~0 >>> 0) >>> (32-operand2);");
+		jsCodes.push("operand1.low = ((operand1.low >>> operand2) | ((operand1.high & mask) << (32-operand2))) >>> 0;");
+		jsCodes.push("operand1.high = (operand1.high >>> operand2) >>> 0;");
+		jsCodes.push("}else{");
+		jsCodes.push("operand1.low = (operand1.high >>> (operand2 - 32)) >>> 0;");
+		jsCodes.push("operand1.high = 0;");
+		jsCodes.push("}");
+		jsCodes.push("operand1 = CappuccinoVM.getSignFromOpponent(operand1);");
+		jsCodes.push("vmStack[thread.stackPtr-2] = operand1.high;");
+		jsCodes.push("vmStack[thread.stackPtr-3] = operand1.low;");
 		jsCodes.push("thread.stackPtr--;");
 		return i + 1;
 	}
@@ -1235,7 +1356,13 @@ new function()
 
 	Method.instTable[LAND] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack[thread.stackPtr-4] &= vmStack[thread.stackPtr-2];");
+		jsCodes.push("operand1 = CappuccinoVM.getOpponentFromSign({high:vmStack[thread.stackPtr-3], low:vmStack[thread.stackPtr-4]});");
+		jsCodes.push("operand2 = CappuccinoVM.getOpponentFromSign({high:vmStack[thread.stackPtr-1], low:vmStack[thread.stackPtr-2]});");
+		jsCodes.push("operand1.low &= operand2.low;");
+		jsCodes.push("operand1.high &= operand2.high;");
+		jsCodes.push("operand1 = CappuccinoVM.getSignFromOpponent(operand1);");
+		jsCodes.push("vmStack[thread.stackPtr-3] = operand1.high;");
+		jsCodes.push("vmStack[thread.stackPtr-4] = operand1.low;");
 		jsCodes.push("thread.stackPtr-=2;");
 		return i + 1;
 	}
@@ -1249,7 +1376,13 @@ new function()
 
 	Method.instTable[LOR] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack[thread.stackPtr-4] |= vmStack[thread.stackPtr-2];");
+		jsCodes.push("operand1 = CappuccinoVM.getOpponentFromSign({high:vmStack[thread.stackPtr-3], low:vmStack[thread.stackPtr-4]});");
+		jsCodes.push("operand2 = CappuccinoVM.getOpponentFromSign({high:vmStack[thread.stackPtr-1], low:vmStack[thread.stackPtr-2]});");
+		jsCodes.push("operand1.low |= operand2.low;");
+		jsCodes.push("operand1.high |= operand2.high;");
+		jsCodes.push("operand1 = CappuccinoVM.getSignFromOpponent(operand1);");
+		jsCodes.push("vmStack[thread.stackPtr-3] = operand1.high;");
+		jsCodes.push("vmStack[thread.stackPtr-4] = operand1.low;");
 		jsCodes.push("thread.stackPtr-=2;");
 		return i + 1;
 	}
@@ -1263,7 +1396,13 @@ new function()
 
 	Method.instTable[LXOR] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack[thread.stackPtr-4] ^= vmStack[thread.stackPtr-2];");
+		jsCodes.push("operand1 = CappuccinoVM.getOpponentFromSign({high:vmStack[thread.stackPtr-3], low:vmStack[thread.stackPtr-4]});");
+		jsCodes.push("operand2 = CappuccinoVM.getOpponentFromSign({high:vmStack[thread.stackPtr-1], low:vmStack[thread.stackPtr-2]});");
+		jsCodes.push("operand1.low ^= operand2.low;");
+		jsCodes.push("operand1.high ^= operand2.high;");
+		jsCodes.push("operand1 = CappuccinoVM.getSignFromOpponent(operand1);");
+		jsCodes.push("vmStack[thread.stackPtr-3] = operand1.high;");
+		jsCodes.push("vmStack[thread.stackPtr-4] = operand1.low;");
 		jsCodes.push("thread.stackPtr-=2;");
 		return i + 1;
 	}
@@ -1271,7 +1410,7 @@ new function()
 	Method.instTable[I2C] = function(code, i, jsCodes)
 	{
 		//jsCodes.push("vmStack.push(vmStack.pop().toChar());");
-		jsCodes.push("vmStack[thread.stackPtr-1] &= 0xff;");
+		jsCodes.push("vmStack[thread.stackPtr-1] &= 0xffff;");
 		return i + 1;
 	}
 
@@ -1301,13 +1440,16 @@ new function()
 
 	Method.instTable[I2L] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack[thread.stackPtr++] = 0;");
+		jsCodes.push("obj = CappuccinoVM.getLongFromInt(vmStack[thread.stackPtr-1]);");
+		jsCodes.push("vmStack[thread.stackPtr-1] = obj.low;");
+		jsCodes.push("vmStack[thread.stackPtr++] = obj.high;");
 		return i + 1;
 	}
 
 
 	Method.instTable[F2I] = function(code, i, jsCodes)
 	{
+		jsCodes.push("vmStack[thread.stackPtr-1] = Math.floor(vmStack[thread.stackPtr-1]);");
 		return i + 1;
 	}
 
@@ -1319,30 +1461,39 @@ new function()
 
 	Method.instTable[F2L] = function(code, i, jsCodes)
 	{
-		jsCodes.push("vmStack[thread.stackPtr++] = 0;");
+		jsCodes.push("obj=CappuccinoVM.getLongFromDouble(vmStack[thread.stackPtr-1]);");
+		jsCodes.push("vmStack[thread.stackPtr-1] = obj.low;");
+		jsCodes.push("vmStack[thread.stackPtr++] = obj.high;");
 		return i + 1;
 	}
 
 	Method.instTable[L2I] = function(code, i, jsCodes)
 	{
+		jsCodes.push("operand1=CappuccinoVM.getDoubleFromLong(vmStack[thread.stackPtr-1], vmStack[thread.stackPtr-2]);");
+		jsCodes.push("vmStack[thread.stackPtr-2] = operand1;");
 		jsCodes.push("thread.stackPtr--;");
 		return i + 1;
 	}
 
 	Method.instTable[L2F] = function(code, i, jsCodes)
 	{
+		jsCodes.push("operand1=CappuccinoVM.getDoubleFromLong(vmStack[thread.stackPtr-1], vmStack[thread.stackPtr-2]);");
+		jsCodes.push("vmStack[thread.stackPtr-2] = operand1;");
 		jsCodes.push("thread.stackPtr--;");
 		return i + 1;
 	}
 
 	Method.instTable[L2D] = function(code, i, jsCodes)
 	{
+		jsCodes.push("operand1=CappuccinoVM.getDoubleFromLong(vmStack[thread.stackPtr-1], vmStack[thread.stackPtr-2]);");
+		jsCodes.push("vmStack[thread.stackPtr-2] = operand1;");
 		return i + 1;
 	}
 
 
 	Method.instTable[D2I] = function(code, i, jsCodes)
 	{
+		jsCodes.push("vmStack[thread.stackPtr-2] = Math.floor(vmStack[thread.stackPtr-2]);");
 		jsCodes.push("thread.stackPtr--;");
 		return i + 1;
 	}
@@ -1355,7 +1506,598 @@ new function()
 
 	Method.instTable[D2L] = function(code, i, jsCodes)
 	{
+		jsCodes.push("obj=CappuccinoVM.getLongFromDouble(vmStack[thread.stackPtr-2]);");
+		jsCodes.push("vmStack[thread.stackPtr-2] = obj.low;");
+		jsCodes.push("vmStack[thread.stackPtr-1] = obj.high;");
 		return i + 1;
+	}
+
+	////Longの実装////
+	/*
+	memo:
+	highのbit32を符号bitとする
+	オペランドスタック上ではlowが下,highが上
+	*/
+	var addAbsLong = function(highX, lowX, highY, lowY)
+	{
+		var highZ, lowZ;
+		var rad = Math.pow(2, 32)
+		
+		lowZ = lowX + lowY;
+		highZ = highX + highY + Math.floor(lowZ / rad); 
+		lowZ = lowZ % rad;
+		return {high:highZ, low:lowZ};
+	}
+
+	//X >= Yじゃないとダメ
+	var subAbsLong = function(highX, lowX, highY, lowY)
+	{
+		var highZ, lowZ;
+		var rad = Math.pow(2, 32);
+
+		lowX += rad; 
+		lowZ = lowX - lowY;
+		highZ = highX - highY;
+		if(lowZ >= rad)
+		{
+			lowZ -= rad;
+		}
+		else
+		{
+			highZ--;
+		}
+		return {high:highZ, low:lowZ};
+	}
+
+	var cmpAbsLong = function(highX, lowX, highY, lowY)
+	{
+
+		if(highX > highY)
+		{
+			return 1;
+		}
+		else if(highX == highY)
+		{
+			if(lowX > lowY)
+			{
+				return 1;
+			}
+			else if(lowX == lowY)
+			{
+				return 0;
+			}
+			else
+			{
+				return -1;
+			}
+		}
+		else
+		{
+			return -1;
+		}
+	}
+
+	var doCmpLong = function(highX, lowX, highY, lowY)
+	{
+		var signX, signY;
+		var rad = Math.pow(2, 32);
+
+		signX = Math.floor(highX / rad) >>> 0;
+		highX = highX % rad >>> 0;
+		signY = Math.floor(highY / rad) >>> 0;
+		highY = highY % rad >>> 0;
+		if(signX == 0 && signY == 0)
+		{
+			return cmpAbsLong(highX, lowX, highY, lowY);
+		}
+		else if(signX == 0 && signY == 1)
+		{
+			return 1;
+		}
+		else if(signX == 1 && signY == 0)
+		{
+			return -1;
+		}
+		else
+		{
+			return cmpAbsLong(highX, lowX, highY, lowY) * -1;
+		}
+	}
+
+	var doAddLong = function(highX, lowX, highY, lowY)
+	{
+		var signX, signY;
+		var Z;
+		var res;
+		var rad = Math.pow(2, 32);
+
+		signX = Math.floor(highX / rad) >>> 0;
+		highX = highX % rad >>> 0;
+		signY = Math.floor(highY / rad) >>> 0;
+		highY = highY % rad >>> 0;
+
+		if(signX == signY)
+		{
+			Z = addAbsLong(highX, lowX, highY, lowY);
+			Z.high += rad * signX;
+		}
+		else
+		{
+			res = cmpAbsLong(highX, lowX, highY, lowY);
+			if(res == 1)
+			{
+				Z = subAbsLong(highX, lowX, highY, lowY);
+				Z.high += rad * signX;
+			}
+			else if(res == 0)
+			{
+				//符号が違って絶対値が等しければ答えは0
+				Z = {high:0, low:0};
+			}
+			else
+			{
+				Z = subAbsLong(highY, lowY, highX, lowX);
+				Z.high += rad * signY;
+			}
+		}
+		return Z;
+	}
+
+	var doSubLong = function(highX, lowX, highY, lowY)
+	{
+		var signX, signY;
+		var Z;
+		var res;
+		var rad = Math.pow(2, 32);
+
+		signX = Math.floor(highX / rad) >>> 0;
+		highX = highX % rad >>> 0;
+		signY = Math.floor(highY / rad) >>> 0;
+		highY = highY % rad >>> 0;
+
+		if(signX == 0)
+		{
+			if(signY == 0)
+			{
+				res = cmpAbsLong(highX, lowX, highY, lowY);
+				if(res == 1)
+				{
+					Z = subAbsLong(highX, lowX, highY, lowY);
+				}
+				else if(res == 0)
+				{
+					Z = {high:0, low:0};
+				}
+				else
+				{
+					Z = subAbsLong(highY, lowY, highX, lowX);
+					Z.high += rad;
+				}
+			}
+			else
+			{
+				Z = addAbsLong(highX, lowX, highY, lowY);
+			}
+		}
+		else
+		{
+			if(signY == 0)
+			{
+				Z = addAbsLong(highX, lowX, highY, lowY);
+				Z.high += rad;
+			}
+			else
+			{
+				res = cmpAbsLong(highX, lowX, highY, lowY);
+				if(res == 1)
+				{
+					Z = subAbsLong(highX, lowX, highY, lowY);
+					Z.high += rad;
+				}
+				else if(res == 0)
+				{
+					Z = {high:0, low:0};
+				}
+				else
+				{
+					Z = subAbsLong(highY, lowY, highX, lowX);
+				}
+			}
+		}
+		return Z;
+	}
+
+	var doMulLong = function(highX, lowX, highY, lowY)
+	{
+		var signX, signY;
+		var buffX = [];
+		var buffY = [];
+		var buffZ = [];
+		var i, j, tmp;
+		var Z = {high:0, low:0};
+		var rad = Math.pow(2, 32);
+
+		signX = Math.floor(highX / rad) >>> 0;
+		highX = highX % rad >>> 0;
+		signY = Math.floor(highY / rad) >>> 0;
+		highY = highY % rad >>> 0;
+
+		//16bitごとに分割
+		buffX[0] = (lowX & 0x0000ffff) >>> 0;
+		buffX[1] = lowX >>> 16;
+		buffX[2] = (highX & 0x0000ffff) >>> 0;
+		buffX[3] = highX >>> 16;
+		buffY[0] = (lowY & 0x0000ffff) >>> 0;
+		buffY[1] = lowY >>> 16;
+		buffY[2] = (highY & 0x0000ffff) >>> 0;
+		buffY[3] = highY >>> 16;
+
+		for(i=0; i<8; i++)
+		{
+			buffZ[i] = 0;
+		}
+
+		for(i=0; i<4; i++)
+		{
+			tmp = 0;
+			for(j=0; j<4; j++)
+			{
+				tmp += buffX[i] * buffY[j];
+				tmp += buffZ[i+j];
+				buffZ[i+j] = (tmp & 0x0000ffff) >>> 0;
+				tmp >>>= 16;
+			}
+			buffZ[i+j] = (tmp & 0x0000ffff) >>> 0;
+		}
+
+		Z.low = (buffZ[0] + (buffZ[1] << 16)) >>> 0;
+		Z.high = (buffZ[2] + (buffZ[3] << 16)) >>> 0;
+
+		if(signX != signY && (Z.low != 0 || Z.high != 0))
+		{
+			Z.high += rad;
+		}
+		return Z;
+	}
+
+	var cmpLongBuff = function(buffX, buffY)
+	{
+		var i;
+		for(i = 3; i >= 0; i--)
+		{
+			if(buffX[i] > buffY[i])
+			{
+				return 1;
+			}
+			else if(buffX[i] == buffY[i])
+			{
+				continue;
+			}
+			else
+			{
+				return -1;
+			}
+			return 0;
+		}
+	}
+
+	var subLongBuff = function(buffX, buffY)
+	{
+		var tmp;
+		var rad = Math.pow(2, 16);
+		var i;
+
+		tmp = 0;
+		for(i = 0; i < 4; i++)
+		{
+			tmp = rad + buffX[i] - buffY[i] - tmp;
+			buffX[i] = (tmp & 0xffff) >>> 0;
+			if(tmp & 0x10000)
+			{
+				tmp = 0;
+			}
+			else
+			{
+				tmp = 1;
+			}
+		}
+	}
+
+	var doDivLong = function(highX, lowX, highY, lowY)
+	{
+		var signX, signY;
+		var buffW = [];
+		var buffX = [];
+		var buffY = [];
+		var buffZ = [];
+		var sizeX, sizeY, sizeZ;
+		var i, j, tmp, q;
+		var rad = Math.pow(2, 32);
+		var ret = {highQuot:0, lowQuot:0, highMod:0, lowMod:0};
+
+		signX = Math.floor(highX / rad) >>> 0;
+		highX = highX % rad >>> 0;
+		signY = Math.floor(highY / rad) >>> 0;
+		highY = highY % rad >>> 0;
+
+		//16bitごとに分割
+		buffX[0] = (lowX & 0x0000ffff) >>> 0;
+		buffX[1] = lowX >>> 16;
+		buffX[2] = (highX & 0x0000ffff) >>> 0;
+		buffX[3] = highX >>> 16;
+		buffY[0] = (lowY & 0x0000ffff) >>> 0;
+		buffY[1] = lowY >>> 16;
+		buffY[2] = (highY & 0x0000ffff) >>> 0;
+		buffY[3] = highY >>> 16;
+		buffZ[0] = buffZ[1] = buffZ[2] = buffZ[3] = 0;
+
+		sizeX = 0;
+		for(i=3; i>=0; i--)
+		{
+			if(buffX[i] > 0)
+			{
+				sizeX = i + 1;
+				break;
+			}
+		}
+
+		if(sizeX == 0)
+		{
+			return {highQuot:0, lowQuot:0, highMod:0, lowMod:0};
+		}
+
+		sizeY = 0;
+		for(i=3; i>=0; i--)
+		{
+			if(buffY[i] > 0)
+			{
+				sizeY = i + 1;
+				break;
+			}
+		}
+
+		if(sizeY == 0)
+		{
+			throw Error("divide by 0(long)");
+		}
+
+		sizeZ = sizeX - sizeY + 1;
+		q = Math.floor(buffX[sizeX-1] / buffY[sizeY-1]);
+		if(q == 0)
+		{
+			if(sizeX >= 2)
+			{
+				q = Math.floor((((buffX[sizeX-1] << 16) + buffX[sizeX-2]) >>> 0) / buffY[sizeY-1]);
+				sizeZ--;
+			}
+			else
+			{
+				return {highQuot:0, lowQuot:0, highMod:highX, lowMod:lowX};
+			}
+		}
+		i = sizeZ - 1;
+		while(true)
+		{
+			while(true)
+			{
+				for(j = 0; j < 5; j++)
+				{
+					buffW[j] = 0;
+				}
+
+				if(q == 0)
+				{
+					break;
+				}
+
+				tmp = 0;
+				for(j=0; j < sizeY; j++)
+				{
+					tmp += buffY[j] * q;
+					buffW[j+i] = (tmp & 0x0000ffff) >>> 0;
+					tmp >>>= 16;
+				}
+				buffW[j+i] = tmp;
+				if(cmpLongBuff(buffX, buffW) != -1)
+				{
+					break;
+				}
+				q--;
+			}
+			buffZ[i--] = q;
+			subLongBuff(buffX, buffW);
+			if(i == -1)
+			{
+				break;
+			}
+			sizeX = 0;
+			for(j=3; j>=0; j--)
+			{
+				if(buffX[j] != 0)
+				{
+					sizeX = j + 1;
+					break;
+				}
+			}
+			if(sizeX >= 2)
+			{
+				q = Math.floor((((buffX[sizeX-1] << 16) + buffX[sizeX-2]) >>> 0) / buffY[sizeY-1]);
+			}
+			else if(sizeX == 1)
+			{
+				q = Math.floor(buffX[sizeX-1] / buffY[sizeY-1]);
+			}
+			else
+			{
+				break;
+			}
+		}
+		ret.highQuot = ((buffZ[3] << 16) + buffZ[2]) >>> 0;
+		ret.lowQuot = ((buffZ[1] << 16) + buffZ[0]) >>> 0;
+		ret.highMod = ((buffX[3] << 16) + buffX[2]) >>> 0;
+		ret.lowMod = ((buffX[1] << 16) + buffX[0]) >>> 0;
+		if(signX != signY && (ret.highQuot != 0 || ret.lowQuot != 0))
+		{
+			ret.highQuot += rad;
+		}
+		if(signX == 1 && (ret.highMod != 0 || ret.lowMod != 0))
+		{
+			ret.highMod += rad;
+		}
+		return ret;
+	}
+
+	var convLongStr = function(x)
+	{
+		var signX;
+		var ret;
+		var rad = Math.pow(2, 32);
+		
+		signX = Math.floor(x.high / rad);
+		x.high = x.high % rad;
+
+		ret = x.low.toString(16);
+		while(ret.length < 8)
+		{
+			ret = "0" + ret;
+		}
+		ret = x.high.toString(16) + ret;
+		if(signX == 1)
+		{
+			ret = "-" + ret;
+		}
+
+		return ret;
+	}	
+
+	var convLongStr10 = function(x)
+	{
+		var signX;
+		var y = {high:0, low:10};
+		var rad = Math.pow(2, 32);
+		var ret;
+		var str = "";
+		
+		signX = Math.floor(x.high / rad);
+		x.high = x.high % rad;
+
+		do
+		{
+			ret = doDivLong(x.high, x.low, y.high, y.low);
+			str = ret.lowMod.toString() + str;
+			x = {high:ret.highQuot, low:ret.lowQuot};
+		}while(x.high != 0 || x.low != 0);
+		
+		if(signX == 1)
+		{
+			str = "-" + str;
+		}
+		
+		return str;
+	}
+
+	//符号+絶対値の形から2の補数表現へ変換
+	var getOpponentFromSign = function(x)
+	{
+		var high = x.high;
+		var low = x.low;
+		var sign;
+		var rad = Math.pow(2, 32);
+
+		sign = Math.floor(high / rad) >>> 0;
+		high = high % rad >>> 0;
+		low = low >>> 0;
+		if(sign == 1)
+		{
+			//ビットを反転して1足す
+			high = ~high >>> 0;
+			low = ~low >>> 0;
+			low = low + 1;
+			if( low > 0xffffffff)
+			{
+				low = 0;
+				high = high + 1;
+			}
+		}
+		return {high:high >>> 0, low:low >>> 0};
+	}
+
+	//2の補数表現から符号+絶対値の形へ変換
+	var getSignFromOpponent = function(x)
+	{
+		var high = x.high;
+		var low = x.low;
+
+		if(high & 0x80000000)
+		{
+			//負の数なので絶対値を取り出す
+			//ビットを反転して1足す
+			high = ~high >>> 0;
+			low = ~low >>> 0;
+			low = low + 1;
+			if( low > 0xffffffff)
+			{
+				low = 0;
+				high = high + 1;
+			}
+			high += Math.pow(2, 32);
+		}
+		return {high:high, low:low >>> 0}
+	}
+
+	var getLongFromInt = function(x)
+	{
+		var high = 0;
+
+		if(x < 0)
+		{
+			x*=-1;
+			high = Math.pow(2, 32);
+		}
+
+		return {high:high, low:x};
+	}
+
+	var getLongFromDouble = function(x)
+	{
+		var sign, high, low;
+		var rad = Math.pow(2, 32);
+
+		if(x < 0)
+		{
+			sign = 1;
+			x *= -1;
+		}
+		else
+		{
+			sign = 0;
+		}
+		x = Math.floor(x);
+		low = x % rad;
+		high = Math.floor(x / rad) % rad + rad * sign;
+		return {high:high, low:low};
+	}
+
+	var getDoubleFromLong = function(highX, lowX)
+	{
+		var rad = Math.pow(2, 32);
+		var ret, sign;
+
+		if(highX >= rad)
+		{
+			highX = highX % rad;
+			sign = 1;
+		}
+		else
+		{
+			sign = 0;
+		}
+		ret = (highX * rad + lowX);
+		if(sign == 1)
+		{
+			ret *= -1;
+		}
+		return ret; 
 	}
 
 	Method.instTable[NEW] = function(code, i, jsCodes, $cappuccino)
@@ -1429,7 +2171,16 @@ new function()
 	Method.instTable[LDC2_W] = function(code, i, jsCodes, $cappuccino)
 	{
 		var cindex = get16BitsSigned((code[i+1] << 8) + code[i+2]);
-		jsCodes.push("vmStack[thread.stackPtr] = $cappuccino.constantPool[" + cindex + "].value;");
+		var tag = $cappuccino.constantPool[cindex].tag;
+		if(tag == CONSTANT_LONG)
+		{
+			jsCodes.push("vmStack[thread.stackPtr] = $cappuccino.constantPool[" + cindex + "].low >>> 0;");
+			jsCodes.push("vmStack[thread.stackPtr + 1] = $cappuccino.constantPool[" + cindex + "].high;");
+		}
+		else
+		{
+			jsCodes.push("vmStack[thread.stackPtr] = $cappuccino.constantPool[" + cindex + "].value;");
+		}
 		jsCodes.push("thread.stackPtr+=2;");
 		return i + 3;
 	}
@@ -1442,11 +2193,21 @@ new function()
 		jsCodes.push("if(refjclass == null){return {action:'loadClass', className: $cappuccino.constantPool[" + index + "].value.className, pc:" + i + "}}");
 		jsCodes.push("name = $cappuccino.constantPool[" + index + "].value.name;");
 		jsCodes.push("jclass = $cappuccino.findFieldOwner(name, refjclass);");
-		jsCodes.push("vmStack[thread.stackPtr++] = jclass[name];");
-		if((fieldType == "TYPE_DOUBLE") || (fieldType == "TYPE_LONG"))
+		if(fieldType == TYPE_LONG)
 		{
-			jsCodes.push("thread.stackPtr++");
+			jsCodes.push("vmStack[thread.stackPtr++] = jclass[name].low;");
+			jsCodes.push("vmStack[thread.stackPtr++] = jclass[name].high;");
 		}
+		else if(fieldType == TYPE_DOUBLE)
+		{
+			jsCodes.push("vmStack[thread.stackPtr++] = jclass[name];");
+			jsCodes.push("thread.stackPtr++;");
+		}
+		else
+		{
+			jsCodes.push("vmStack[thread.stackPtr++] = jclass[name];");
+		}
+
 		return i + 3;
 	}
 
@@ -1458,11 +2219,20 @@ new function()
 		jsCodes.push("if(refjclass == null){return {action:'loadClass', className: $cappuccino.constantPool[" + index + "].value.className, pc:" + i + "}}");
 		jsCodes.push("name = $cappuccino.constantPool[" + index + "].value.name;");
 		jsCodes.push("jclass = $cappuccino.findFieldOwner(name, refjclass);");
-		if((fieldType == "TYPE_DOUBLE") || (fieldType == "TYPE_LONG"))
+		if(fieldType == TYPE_LONG)
 		{
-			jsCodes.push("thread.stackPtr--;");
+			jsCodes.push("jclass[name] = {high:vmStack[thread.stackPtr-1], low:vmStack[thread.stackPtr-2]};");
+			jsCodes.push("thread.stackPtr-=2;");
 		}
-		jsCodes.push("jclass[name]=vmStack[--thread.stackPtr];");
+		else if(fieldType == TYPE_DOUBLE)
+		{
+			jsCodes.push("jclass[name] = vmStack[thread.stackPtr-2];");
+			jsCodes.push("thread.stackPtr-=2;");
+		}
+		else
+		{
+			jsCodes.push("jclass[name]=vmStack[--thread.stackPtr];");
+		}
 		return i + 3;
 	}
 
@@ -1472,11 +2242,28 @@ new function()
 		var fname = $cappuccino.constantPool[index].value.name;
 		var fieldType = $cappuccino.constantPool[index].fieldType;
 		jsCodes.push("obj = vmStack[thread.stackPtr-1];");
+		if(fieldType == TYPE_LONG)
+		{
+			jsCodes.push("vmStack[thread.stackPtr-1] = obj['" + fname + "'].low;");
+			jsCodes.push("vmStack[thread.stackPtr] = obj['" + fname + "'].high;");
+			jsCodes.push("thread.stackPtr++;");
+		}
+		else if(fieldType == TYPE_DOUBLE)
+		{
+			jsCodes.push("vmStack[thread.stackPtr-1] = obj['" + fname + "'];");
+			jsCodes.push("thread.stackPtr++;");
+		}
+		else
+		{
+			jsCodes.push("vmStack[thread.stackPtr-1] = obj['" + fname + "'];");
+		}
+		/*
 		jsCodes.push("vmStack[thread.stackPtr-1] = obj['" + fname + "'];");
 		if((fieldType == TYPE_DOUBLE) || (fieldType == TYPE_LONG))
 		{
 			jsCodes.push("thread.stackPtr++;");
 		}
+		*/
 		return i + 3;
 	}
 
@@ -1485,6 +2272,26 @@ new function()
 		var index = (code[i+1] << 8) + code[i+2];
 		var fname = $cappuccino.constantPool[index].value.name;
 		var fieldType = $cappuccino.constantPool[index].fieldType;
+		if(fieldType == TYPE_LONG)
+		{
+			jsCodes.push("operand1 = {high:vmStack[thread.stackPtr-1], low:vmStack[thread.stackPtr-2]};");
+			jsCodes.push("obj = vmStack[thread.stackPtr-3];");
+			jsCodes.push("thread.stackPtr -= 3;");
+		}
+		else if(fieldType == TYPE_DOUBLE)
+		{
+			jsCodes.push("operand1 = vmStack[thread.stackPtr-2];"); 
+			jsCodes.push("obj = vmStack[thread.stackPtr-3];");
+			jsCodes.push("thread.stackPtr -= 3;");
+		}
+		else
+		{
+			jsCodes.push("operand1 = vmStack[thread.stackPtr-1];"); 
+			jsCodes.push("obj = vmStack[thread.stackPtr-2];");
+			jsCodes.push("thread.stackPtr -= 2;");
+		}
+		jsCodes.push("obj['" + fname + "'] = operand1;");
+		/*
 		if((fieldType == TYPE_DOUBLE) || (fieldType == TYPE_LONG))
 		{
 			jsCodes.push("thread.stackPtr--;");
@@ -1492,6 +2299,7 @@ new function()
 		jsCodes.push("operand1 = vmStack[--thread.stackPtr];");
 		jsCodes.push("obj = vmStack[--thread.stackPtr];");
 		jsCodes.push("obj['" + fname + "'] = operand1;");
+		*/
 		return i + 3;
 	}
 
@@ -1550,7 +2358,7 @@ new function()
 	Method.instTable[DRETURN] = Method.instTable[LRETURN] = function(code, i, jsCodes)
 	{
 		jsCodes.push("thread.stackPtr-=2;");
-		jsCodes.push("return {action:'returnValueWide', value:vmStack[thread.stackPtr]};");
+		jsCodes.push("return {action:'returnValueWide', value:{high:vmStack[thread.stackPtr+1], low:vmStack[thread.stackPtr]}};");
 		return i + 1;
 	}
 
@@ -1577,7 +2385,7 @@ new function()
 		//jsCodes.push("CappuccinoVM.debugPrint(stackTop);");
 		//jsCodes.push("CappuccinoVM.debugPrint(pc);");
 		//jsCodes.push("CappuccinoVM.debugPrint($cappuccino);");
-		jsCodes.push("var methodref, jclass, refjclass, method, name, sp, operand1, operand2, obj;");
+		jsCodes.push("var methodref, jclass, refjclass, method, name, sp, operand1, operand2, obj, mask;");
 		jsCodes.push("while(true){");
 		jsCodes.push("switch(pc){");
 		while(i < code.length)
@@ -1589,11 +2397,13 @@ new function()
 		jsCodes.push("default: throw Error('Invalid pc?');");
 		jsCodes.push("}}");
 
-		//debugPrint("//" + this.name);
-		//for(i = 0; i < jsCodes.length; i++)
-		//{
-		//	debugPrint(jsCodes[i]);
-		//}
+		/*
+		debugPrint("//" + this.name);
+		for(i = 0; i < jsCodes.length; i++)
+		{
+			debugPrint(jsCodes[i]);
+		}
+		*/
 
 		this.compiledMethod = new Function(jsCodes.join("\n"));
 	}
@@ -1770,8 +2580,10 @@ new function()
 					break;
 
 				case CONSTANT_LONG:
-					//仮の実装
-					c  = new ConstLong(classData[i], (classData[i+1] << 56) + (classData[i+2] << 48) + (classData[i+3] << 40) + (classData[i+4] << 32) + (classData[i+5] << 24) + (classData[i+6] << 16) + (classData[i+7] << 8) + classData[i+8]);
+					//c  = new ConstLong(classData[i], (classData[i+1] << 56) + (classData[i+2] << 48) + (classData[i+3] << 40) + (classData[i+4] << 32) + (classData[i+5] << 24) + (classData[i+6] << 16) + (classData[i+7] << 8) + classData[i+8]);
+					highBytes = (classData[i+1] << 24) + (classData[i+2] << 16) + (classData[i+3] << 8) + classData[i+4];
+					lowBytes = (classData[i+5] << 24) + (classData[i+6] << 16) + (classData[i+7] << 8) + classData[i+8];
+					c = new ConstLong(classData[i], highBytes >>> 0, lowBytes >>> 0);
 					cpool.push(c);
 					//cpool.push(new ConstEmpty());
 					cpool.push(new ConstEmpty());
@@ -2130,7 +2942,8 @@ new function()
 					}
 					if(ret.action == "returnValueWide")
 					{
-						this.vmStack[this.stackPtr] = ret.value;
+						this.vmStack[this.stackPtr] = ret.value.low;
+						this.vmStack[this.stackPtr+1] = ret.value.high;
 						this.stackPtr+=2;
 					}
 				}
@@ -2240,7 +3053,14 @@ new function()
 
 	var printlnLong = new Method(0x0000, "println", "(J)V");
 	printlnLong.codeAttr = new Code(0, 3, null);
-	printlnLong.compiledMethod = printlnInt.compiledMethod;
+	//printlnLong.compiledMethod = printlnInt.compiledMethod;
+	printlnLong.compiledMethod = function(javaThread)
+	{
+		var vmStack = javaThread.vmStack;
+		var stackBase = javaThread.stackBase;
+		debugPrint(convLongStr10({low:vmStack[stackBase+1], high:vmStack[stackBase+2]}));
+		return {action:"return"};
+	}
 	PrintStream.$cappuccino.addMethod(printlnLong);
 
 	classHash["java/io/PrintStream"] = PrintStream;
@@ -2326,7 +3146,15 @@ new function()
 
 	var appendLong = new Method(0x0000, "append", "(J)Ljava/lang/StringBuilder;");
 	appendLong.codeAttr = new Code(0, 3, null);
-	appendLong.compiledMethod = appendInt.compiledMethod;
+	appendLong.compiledMethod = function(javaThread)
+	{
+		var vmStack = javaThread.vmStack;
+		var stackBase = javaThread.stackBase;
+		var thisObj = vmStack[stackBase];
+		var arg = {high:vmStack[stackBase+2], low:vmStack[stackBase+1]};
+		thisObj.str = thisObj.str + convLongStr10(arg);
+		return {action:"returnValue", value:thisObj};
+	}
 	StringBuilder.$cappuccino.addMethod(appendLong);
 
 	var appendString = new Method(0x0000, "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;");
@@ -2441,7 +3269,7 @@ new function()
 	currentTimeMillis.compiledMethod = function(javaThread)
 	{
 		var dd = new Date();
-		return {action: "returnValueWide", value:dd.getTime()}
+		return {action: "returnValueWide", value:getLongFromDouble(dd.getTime())}
 	}
 	System.$cappuccino.addMethod(currentTimeMillis);
 
@@ -2511,5 +3339,15 @@ new function()
 		getJavaClass: getJavaClass,
 		makeArray: makeArray,
 		createJavaString: createJavaString,
+		doAddLong: doAddLong,
+		doSubLong: doSubLong,
+		doMulLong: doMulLong,
+		doDivLong: doDivLong,
+		doCmpLong: doCmpLong,
+		getOpponentFromSign: getOpponentFromSign,
+		getSignFromOpponent: getSignFromOpponent,
+		getLongFromInt: getLongFromInt,
+		getLongFromDouble: getLongFromDouble,
+		getDoubleFromLong: getDoubleFromLong
 	}
 }

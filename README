@@ -44,11 +44,10 @@ CappuccinoVM.startMain('HelloWorld');
 これが実行されるとCappuccinoVMはHelloWorld.classをサーバーからダウンロードしてきます。そしてクラスファイルを解析し、JavaバイトコードをJavaScritpに変換して実行します。いわゆるJITコンパイラです。
 
 現在の進捗:
-JavaVMの命令の半分程度を実装しています。簡単な処理を行って結果をSystem.out.printlnすることはできます。longは使えませんがint,float,doubleなどは使えます。
+JavaVMの命令の半分程度を実装しています。簡単な処理を行って結果をSystem.out.printlnすることはできます。
 
 今後実装したいと思っているもの:
 マルチスレッド
 例外処理
 Swing
 WebStorageを使った仮想ファイルシステムのようなもの(dropboxとかのクラウドストレージも使えるか?)
-Android,iOS対応
